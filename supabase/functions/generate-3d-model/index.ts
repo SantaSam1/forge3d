@@ -24,23 +24,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Support both REPLICATE_API_TOKEN and REPLICATE_API_KEY
-    const replicateApiKey =
-      Deno.env.get("REPLICATE_API_TOKEN") || Deno.env.get("REPLICATE_API_KEY");
-
-    if (!replicateApiKey) {
+    const hfToken = Deno.env.get("HF_TOKEN");
+    if (!hfToken) {
       return new Response(
-        JSON.stringify({ error: "REPLICATE_API_TOKEN not configured" }),
+        JSON.stringify({ error: "HF_TOKEN not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-     const supabase = createClient(
-   Deno.env.get("DB_URL")!,
-   Deno.env.get("DB_SERVICE_KEY")!
- );
+    const supabase = createClient(
+      Deno.env.get("DB_URL")!,
+      Deno.env.get("DB_SERVICE_KEY")!
+    );
 
-    // --- Rate limiting: max FREE_GENERATION_LIMIT per user ---
+    // --- Rate limiting ---
     if (user_id) {
       const { count } = await supabase
         .from("models")
@@ -56,7 +53,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // --- 1. Create DB record with status "processing" ---
+    // --- 1. Create DB record ---
     const { data: modelRecord, error: insertError } = await supabase
       .from("models")
       .insert({
@@ -71,7 +68,6 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (insertError) throw insertError;
-
     const modelId = modelRecord.id;
 
     const markFailed = async (reason: string) => {
@@ -81,105 +77,57 @@ Deno.serve(async (req: Request) => {
         .eq("id", modelId);
     };
 
-    // --- 2. Call Replicate shap-e ---
-    const predictionRes = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${replicateApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        version: "5957069d5c509126a73c7cb68abcddbb985aeefa4d318e7c63ec1352ce6da68c",
-        input: { prompt, batch_size: 1 },
-      }),
-    });
-
-    if (!predictionRes.ok) {
-      const errText = await predictionRes.text();
-      await markFailed(`Replicate API error: ${errText}`);
-      return new Response(
-        JSON.stringify({ error: "Replicate API error", details: errText }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const prediction = await predictionRes.json();
-    const pollUrl =
-      prediction.urls?.get ||
-      `https://api.replicate.com/v1/predictions/${prediction.id}`;
-
-    // --- 3. Poll for result (max 120s) ---
-    let result = prediction;
-    for (let i = 0; i < 40; i++) {
-      if (["succeeded", "failed", "canceled"].includes(result.status)) break;
-      await new Promise((r) => setTimeout(r, 3000));
-      const pollRes = await fetch(pollUrl, {
-        headers: { Authorization: `Token ${replicateApiKey}` },
-      });
-      result = await pollRes.json();
-    }
-
-    if (result.status !== "succeeded") {
-      await markFailed(`Generation status: ${result.status}`);
-      return new Response(
-        JSON.stringify({ error: "Generation failed", status: result.status }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const outputUrl = Array.isArray(result.output) ? result.output[0] : result.output;
-
-    // --- 4. Download .glb and upload to Supabase Storage ---
-    let storedUrl = outputUrl;
-    let fileSize = 0;
-
-    try {
-      const fileResponse = await fetch(outputUrl);
-      if (fileResponse.ok) {
-        const fileBuffer = await fileResponse.arrayBuffer();
-        fileSize = fileBuffer.byteLength;
-        const userId = user_id || "anon";
-        const filePath = `${userId}/${modelId}.glb`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("models")
-          .upload(filePath, fileBuffer, {
-            contentType: "model/gltf-binary",
-            upsert: false,
-          });
-
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
-            .from("models")
-            .getPublicUrl(filePath);
-          storedUrl = publicUrlData.publicUrl;
-        }
+    // --- 2. Call HF Inference API ---
+    const hfRes = await fetch(
+      "https://api-inference.huggingface.co/models/openai/shap-e",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${hfToken}`,
+          "Content-Type": "application/json",
+          "X-Wait-For-Model": "true",
+        },
+        body: JSON.stringify({ inputs: prompt }),
       }
-    } catch (storageErr) {
-      console.warn("Storage upload failed, using direct URL:", storageErr);
+    );
+
+    if (!hfRes.ok) {
+      const errText = await hfRes.text();
+      if (hfRes.status === 503) {
+        await new Promise((r) => setTimeout(r, 30000));
+        const retry = await fetch(
+          "https://api-inference.huggingface.co/models/openai/shap-e",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${hfToken}`,
+              "Content-Type": "application/json",
+              "X-Wait-For-Model": "true",
+            },
+            body: JSON.stringify({ inputs: prompt }),
+          }
+        );
+        if (!retry.ok) {
+          const retryErr = await retry.text();
+          await markFailed(`HF API error: ${retryErr}`);
+          return new Response(
+            JSON.stringify({ error: "HF API error", details: retryErr }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const fileBuffer = await retry.arrayBuffer();
+        return await saveAndReturn(supabase, modelId, user_id, fileBuffer, corsHeaders);
+      }
+      await markFailed(`HF API error: ${errText}`);
+      return new Response(
+        JSON.stringify({ error: "HF API error", details: errText }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // --- 5. Update DB to "ready" ---
-    await supabase
-      .from("models")
-      .update({
-        status: "ready",
-        file_url: storedUrl,
-        file_size: fileSize,
-        metadata: { prediction_id: result.id, original_url: outputUrl },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", modelId);
+    const fileBuffer = await hfRes.arrayBuffer();
+    return await saveAndReturn(supabase, modelId, user_id, fileBuffer, corsHeaders);
 
-    return new Response(
-      JSON.stringify({
-        url: storedUrl,
-        status: "succeeded",
-        prediction_id: result.id,
-        model_id: modelId,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (err) {
     console.error(err);
     return new Response(
@@ -188,3 +136,48 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+async function saveAndReturn(
+  supabase: ReturnType<typeof createClient>,
+  modelId: string,
+  user_id: string | undefined,
+  fileBuffer: ArrayBuffer,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  let storedUrl = "";
+  const fileSize = fileBuffer.byteLength;
+  const userId = user_id || "anon";
+  const filePath = `${userId}/${modelId}.glb`;
+
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from("models")
+      .upload(filePath, fileBuffer, {
+        contentType: "model/gltf-binary",
+        upsert: false,
+      });
+    if (!uploadError) {
+      const { data: publicUrlData } = supabase.storage
+        .from("models")
+        .getPublicUrl(filePath);
+      storedUrl = publicUrlData.publicUrl;
+    }
+  } catch (e) {
+    console.warn("Storage upload failed:", e);
+  }
+
+  await supabase
+    .from("models")
+    .update({
+      status: "ready",
+      file_url: storedUrl,
+      file_size: fileSize,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", modelId);
+
+  return new Response(
+    JSON.stringify({ url: storedUrl, status: "succeeded", model_id: modelId }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
