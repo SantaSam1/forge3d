@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const FREE_GENERATION_LIMIT = 5;
+const TRIPO_API = "https://api.tripo3d.ai/v2/openapi";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -24,10 +25,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const hfToken = Deno.env.get("HF_TOKEN");
-    if (!hfToken) {
+    const tripoKey = Deno.env.get("TRIPO_API_KEY");
+    if (!tripoKey) {
       return new Response(
-        JSON.stringify({ error: "HF_TOKEN not configured" }),
+        JSON.stringify({ error: "TRIPO_API_KEY not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -77,56 +78,111 @@ Deno.serve(async (req: Request) => {
         .eq("id", modelId);
     };
 
-    // --- 2. Call HF Inference API ---
-    const hfRes = await fetch(
-      "https://api-inference.huggingface.co/models/openai/shap-e",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${hfToken}`,
-          "Content-Type": "application/json",
-          "X-Wait-For-Model": "true",
-        },
-        body: JSON.stringify({ inputs: prompt }),
-      }
-    );
+    // --- 2. Submit task to Tripo3D ---
+    const taskRes = await fetch(`${TRIPO_API}/task`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${tripoKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        type: "text_to_model",
+        prompt,
+      }),
+    });
 
-    if (!hfRes.ok) {
-      const errText = await hfRes.text();
-      if (hfRes.status === 503) {
-        await new Promise((r) => setTimeout(r, 30000));
-        const retry = await fetch(
-          "https://api-inference.huggingface.co/models/openai/shap-e",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${hfToken}`,
-              "Content-Type": "application/json",
-              "X-Wait-For-Model": "true",
-            },
-            body: JSON.stringify({ inputs: prompt }),
-          }
-        );
-        if (!retry.ok) {
-          const retryErr = await retry.text();
-          await markFailed(`HF API error: ${retryErr}`);
-          return new Response(
-            JSON.stringify({ error: "HF API error", details: retryErr }),
-            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        const fileBuffer = await retry.arrayBuffer();
-        return await saveAndReturn(supabase, modelId, user_id, fileBuffer, corsHeaders);
-      }
-      await markFailed(`HF API error: ${errText}`);
+    const taskData = await taskRes.json();
+
+    if (!taskRes.ok || !taskData.data?.task_id) {
+      const err = JSON.stringify(taskData);
+      await markFailed(`Tripo task error: ${err}`);
       return new Response(
-        JSON.stringify({ error: "HF API error", details: errText }),
+        JSON.stringify({ error: "Tripo API error", details: err }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const fileBuffer = await hfRes.arrayBuffer();
-    return await saveAndReturn(supabase, modelId, user_id, fileBuffer, corsHeaders);
+    const taskId = taskData.data.task_id;
+
+    // --- 3. Poll until done (max 120s) ---
+    let modelUrl = "";
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+
+      const pollRes = await fetch(`${TRIPO_API}/task/${taskId}`, {
+        headers: { Authorization: `Bearer ${tripoKey}` },
+      });
+      const pollData = await pollRes.json();
+      const status = pollData.data?.status;
+
+      if (status === "success") {
+        modelUrl = pollData.data?.output?.model || "";
+        break;
+      }
+
+      if (status === "failed" || status === "cancelled") {
+        await markFailed(`Tripo generation failed: ${status}`);
+        return new Response(
+          JSON.stringify({ error: "Generation failed", status }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    if (!modelUrl) {
+      await markFailed("Timeout waiting for Tripo");
+      return new Response(
+        JSON.stringify({ error: "Timeout waiting for model" }),
+        { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // --- 4. Download GLB and upload to Supabase Storage ---
+    let storedUrl = modelUrl;
+    let fileSize = 0;
+
+    try {
+      const fileRes = await fetch(modelUrl);
+      if (fileRes.ok) {
+        const fileBuffer = await fileRes.arrayBuffer();
+        fileSize = fileBuffer.byteLength;
+        const userId = user_id || "anon";
+        const filePath = `${userId}/${modelId}.glb`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("models")
+          .upload(filePath, fileBuffer, {
+            contentType: "model/gltf-binary",
+            upsert: false,
+          });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from("models")
+            .getPublicUrl(filePath);
+          storedUrl = publicUrlData.publicUrl;
+        }
+      }
+    } catch (e) {
+      console.warn("Storage upload failed:", e);
+    }
+
+    // --- 5. Update DB to ready ---
+    await supabase
+      .from("models")
+      .update({
+        status: "ready",
+        file_url: storedUrl,
+        file_size: fileSize,
+        metadata: { task_id: taskId, original_url: modelUrl },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", modelId);
+
+    return new Response(
+      JSON.stringify({ url: storedUrl, status: "succeeded", model_id: modelId }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (err) {
     console.error(err);
@@ -136,48 +192,3 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
-
-async function saveAndReturn(
-  supabase: ReturnType<typeof createClient>,
-  modelId: string,
-  user_id: string | undefined,
-  fileBuffer: ArrayBuffer,
-  corsHeaders: Record<string, string>
-): Promise<Response> {
-  let storedUrl = "";
-  const fileSize = fileBuffer.byteLength;
-  const userId = user_id || "anon";
-  const filePath = `${userId}/${modelId}.glb`;
-
-  try {
-    const { error: uploadError } = await supabase.storage
-      .from("models")
-      .upload(filePath, fileBuffer, {
-        contentType: "model/gltf-binary",
-        upsert: false,
-      });
-    if (!uploadError) {
-      const { data: publicUrlData } = supabase.storage
-        .from("models")
-        .getPublicUrl(filePath);
-      storedUrl = publicUrlData.publicUrl;
-    }
-  } catch (e) {
-    console.warn("Storage upload failed:", e);
-  }
-
-  await supabase
-    .from("models")
-    .update({
-      status: "ready",
-      file_url: storedUrl,
-      file_size: fileSize,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", modelId);
-
-  return new Response(
-    JSON.stringify({ url: storedUrl, status: "succeeded", model_id: modelId }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
-}
