@@ -119,10 +119,14 @@ export default function Studio({ onClose, addToast }: StudioProps) {
         attempts++;
         await new Promise(r => setTimeout(r, 3000));
 
-        const statusRes = await fetch(
-          `${FUNC_URL}?task_id=${task_id}&model_id=${model_id}`,
-          { headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
-        );
+        const statusRes = await fetch(FUNC_URL, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ task_id, model_id }),
+});
         const statusData = await statusRes.json();
 
         if (statusData.status === 'success') {
