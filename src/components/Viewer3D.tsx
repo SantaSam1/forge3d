@@ -124,7 +124,7 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
       modelRef.current = null;
     }
 
-    const ext = format?.toLowerCase() || modelUrl.split('.').pop()?.toLowerCase() || 'glb';
+    const ext = format?.toLowerCase() || 'glb';
 
     const onLoaded = (obj: THREE.Object3D) => {
       // Center and scale

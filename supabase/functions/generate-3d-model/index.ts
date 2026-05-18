@@ -15,17 +15,32 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const url = new URL(req.url);
+  if (url.searchParams.get("proxy")) {
+    const modelUrl = url.searchParams.get("proxy")!;
+    try {
+      const fileRes = await fetch(modelUrl);
+      const buffer = await fileRes.arrayBuffer();
+      return new Response(buffer, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "model/gltf-binary",
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
   try {
     const body = await req.json();
-
-    // If task_id present — check status
     if (body.task_id && body.model_id) {
       return await checkStatus(body.task_id, body.model_id);
     }
-
-    // Otherwise — create new task
     return await createTask(body);
-
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -96,8 +111,6 @@ async function checkStatus(taskId: string, modelId: string): Promise<Response> {
   });
   const pollData = await pollRes.json();
   const status = pollData.data?.status;
-
-  console.log("Tripo status:", status, "output:", JSON.stringify(pollData.data?.output));
 
   if (status === "success") {
     const modelUrl = pollData.data?.output?.model || "";

@@ -130,7 +130,8 @@ export default function Studio({ onClose, addToast }: StudioProps) {
         const statusData = await statusRes.json();
 
         if (statusData.status === 'success') {
-          setModelUrl(statusData.url);
+          const proxyUrl = `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(statusData.url)}`;
+setModelUrl(proxyUrl);
           setModelFormat('glb');
           setModelName(prompt.slice(0, 40));
           setGenerationCount(c => c + 1);
