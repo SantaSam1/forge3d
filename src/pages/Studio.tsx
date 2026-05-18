@@ -85,10 +85,12 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     }
 
     setGenerating(true);
-    addToast(t.messages.generationStarted, 'info');
+    addToast('Starting generation...', 'info');
 
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-3d-model`, {
+      const FUNC_URL = `${SUPABASE_URL}/functions/v1/generate-3d-model`;
+
+      const res = await fetch(FUNC_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -100,24 +102,43 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       const data = await res.json();
 
       if (res.status === 429) {
-        addToast(`Free limit reached (${data.limit} generations). Upgrade to Pro.`, 'error');
+        addToast(`Free limit reached. Upgrade to Pro.`, 'error');
         return;
       }
 
       if (!res.ok || data.error) {
-        throw new Error(data.error || 'Generation failed');
+        throw new Error(data.error || 'Failed to start generation');
       }
 
-      setModelUrl(data.url);
-      setModelFormat('glb');
-      setModelName(prompt.slice(0, 40));
-      setGenerationCount((c) => c + 1);
-      addToast(t.messages.generationSuccess, 'success');
+      const { task_id, model_id } = data;
+      addToast('Generating 3D model... (~1 min)', 'info');
 
-      // Refresh history if on that tab
-      if (activeTab === 'history') {
-        loadUserModels(true);
-      }
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        if (attempts >= 40) throw new Error('Timeout');
+        attempts++;
+        await new Promise(r => setTimeout(r, 3000));
+
+        const statusRes = await fetch(
+          `${FUNC_URL}?task_id=${task_id}&model_id=${model_id}`,
+          { headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+        );
+        const statusData = await statusRes.json();
+
+        if (statusData.status === 'success') {
+          setModelUrl(statusData.url);
+          setModelFormat('glb');
+          setModelName(prompt.slice(0, 40));
+          setGenerationCount(c => c + 1);
+          addToast('3D model ready!', 'success');
+          return;
+        }
+        if (statusData.status === 'failed') throw new Error('Generation failed');
+        return poll();
+      };
+
+      await poll();
+
     } catch (err) {
       addToast(t.messages.generationFailed, 'error');
       console.error(err);
