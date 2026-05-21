@@ -113,7 +113,8 @@ async function checkStatus(taskId: string, modelId: string): Promise<Response> {
   const status = pollData.data?.status;
 
   if (status === "success") {
-    const modelUrl = pollData.data?.output?.model || "";
+    console.log("FULL OUTPUT:", JSON.stringify(pollData.data));
+    const modelUrl = pollData.data?.output?.model || pollData.data?.output?.pbr_model || pollData.data?.output?.base_model || "";
 
     await supabase.from("models").update({
       status: "ready", file_url: modelUrl, updated_at: new Date().toISOString(),
