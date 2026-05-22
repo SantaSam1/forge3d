@@ -5,7 +5,7 @@ export type Lang = 'ru' | 'en';
 const translations = {
   en: {
     // Nav
-    appName: 'Forma3D',
+    appName: '3D-Prin',
     nav: {
       studio: 'Studio',
       library: 'Library',
@@ -141,7 +141,7 @@ const translations = {
         privacy: 'Privacy',
         terms: 'Terms',
       },
-      copy: '© 2026 Forma3D. All rights reserved.',
+      copy: '© 2026 3D-Prin. All rights reserved.',
     },
     // Toast / messages
     messages: {
@@ -156,7 +156,7 @@ const translations = {
     },
   },
   ru: {
-    appName: 'Forma3D',
+    appName: '3D-Prin',
     nav: {
       studio: 'Студия',
       library: 'Библиотека',
@@ -286,7 +286,7 @@ const translations = {
         privacy: 'Конфиденциальность',
         terms: 'Условия',
       },
-      copy: '© 2026 Forma3D. Все права защищены.',
+      copy: '© 2026 3D-Prin. Все права защищены.',
     },
     messages: {
       generationStarted: 'Генерация модели...',
