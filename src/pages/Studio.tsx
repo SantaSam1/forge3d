@@ -217,7 +217,8 @@ setModelUrl(proxyUrl);
 
   const handleHistoryLoad = (m: Model) => {
     if (m.file_url) {
-      setModelUrl(m.file_url);
+      const proxyUrl = `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(m.file_url)}`;
+      setModelUrl(proxyUrl);
       setModelFormat(m.format || 'glb');
       setModelName(m.name);
       setActiveTab('generate');
