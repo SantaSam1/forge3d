@@ -88,7 +88,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }:
           <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">3D</span>
           </div>
-          <span className="text-white font-semibold text-lg">Forma3D</span>
+          <span className="text-white font-semibold text-lg">3d-prin.ru</span>
         </div>
 
         <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">
