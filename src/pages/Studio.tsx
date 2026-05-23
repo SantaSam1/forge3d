@@ -185,43 +185,71 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   };
 
   const handleDownload = async (targetFormat: string) => {
-    // Use modelDownloadUrl (original Tripo URL) or fall back to modelUrl (proxy)
     const sourceUrl = modelDownloadUrl || modelUrl;
     if (!sourceUrl) return;
     setDownloading(true);
     const filename = `${modelName || 'model'}.${targetFormat}`;
+
     try {
-      let downloadUrl = sourceUrl;
-
-      // If not GLB, convert via CloudConvert
-      if (targetFormat !== 'glb') {
-        addToast(isRu ? `Конвертация в ${targetFormat.toUpperCase()}...` : `Converting to ${targetFormat.toUpperCase()}...`, 'info');
-        const convRes = await fetch(`${SUPABASE_URL}/functions/v1/convert-3d-model`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            source_url: modelDownloadUrl || modelUrl,
-            output_format: targetFormat,
-          }),
-        });
-        const convData = await convRes.json();
-        if (!convRes.ok || convData.error) {
-          throw new Error(convData.details || convData.error || 'Conversion failed');
-        }
-        downloadUrl = convData.url;
+      if (targetFormat === 'glb' || targetFormat === 'gltf') {
+        const response = await fetch(modelUrl || sourceUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        addToast(isRu ? 'Файл скачан!' : 'File downloaded!', 'success');
+        return;
       }
 
-      // For GLB - use proxy URL which always works
-      if (targetFormat === 'glb') {
-        downloadUrl = modelUrl || sourceUrl;
+      addToast(isRu ? `Конвертация в ${targetFormat.toUpperCase()}...` : `Converting to ${targetFormat.toUpperCase()}...`, 'info');
+
+      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+      const { OBJExporter } = await import('three/examples/jsm/exporters/OBJExporter.js');
+      const { STLExporter } = await import('three/examples/jsm/exporters/STLExporter.js');
+
+      const loader = new GLTFLoader();
+      const gltf = await new Promise<any>((resolve, reject) => {
+        loader.load(modelUrl || sourceUrl, resolve, undefined, reject);
+      });
+
+      let content: string | ArrayBuffer;
+      let mimeType: string;
+
+      if (targetFormat === 'obj') {
+        const exporter = new OBJExporter();
+        content = exporter.parse(gltf.scene);
+        mimeType = 'text/plain';
+      } else if (targetFormat === 'stl') {
+        const exporter = new STLExporter();
+        content = exporter.parse(gltf.scene, { binary: true }) as unknown as ArrayBuffer;
+        mimeType = 'application/octet-stream';
+      } else {
+        // FBX, USDZ — not supported client-side, download as GLB
+        addToast(
+          isRu ? `${targetFormat.toUpperCase()} не поддерживается в браузере, скачиваем GLB` : `${targetFormat.toUpperCase()} not supported in browser, downloading GLB`,
+          'info'
+        );
+        const response = await fetch(modelUrl || sourceUrl);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${modelName || 'model'}.glb`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        addToast(isRu ? 'Файл скачан!' : 'File downloaded!', 'success');
+        return;
       }
 
-      const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
+      const blob = new Blob([content], { type: mimeType });
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -231,9 +259,10 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
       addToast(isRu ? 'Файл скачан!' : 'File downloaded!', 'success');
+
     } catch (err) {
       console.error('Download failed:', err);
-      addToast(isRu ? `Ошибка: ${String(err)}` : `Error: ${String(err)}`, 'error');
+      addToast(isRu ? `Ошибка скачивания: ${String(err)}` : `Download error: ${String(err)}`, 'error');
     } finally {
       setDownloading(false);
     }
