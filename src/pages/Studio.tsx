@@ -36,6 +36,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [modelUrl, setModelUrl] = useState<string | undefined>();
   const [modelFormat, setModelFormat] = useState<string>('glb');
   const [modelName, setModelName] = useState('');
+  const [modelDownloadUrl, setModelDownloadUrl] = useState<string | undefined>();
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [librarySearch, setLibrarySearch] = useState('');
   const [libraryLoaded, setLibraryLoaded] = useState(false);
@@ -116,7 +117,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
         const sd = await sr.json();
         if (sd.status === 'success') {
           const proxyUrl = `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(sd.url)}`;
-          setModelUrl(proxyUrl); setModelFormat('glb'); setModelName(prompt.slice(0, 40));
+          setModelUrl(proxyUrl); setModelDownloadUrl(sd.url); setModelFormat('glb'); setModelName(prompt.slice(0, 40));
           setGenerationCount(c => c + 1);
           addToast(isRu ? '3D-модель готова!' : '3D model ready!', 'success');
           return;
@@ -168,7 +169,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const handleHistoryLoad = (m: Model) => {
     if (!m.file_url) return;
     const proxyUrl = `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(m.file_url)}`;
-    setModelUrl(proxyUrl); setModelFormat(m.format || 'glb'); setModelName(m.name);
+    setModelUrl(proxyUrl); setModelDownloadUrl(m.file_url); setModelFormat(m.format || 'glb'); setModelName(m.name);
     setActiveMobileTab('generate');
     addToast(`${m.name} ${isRu ? 'загружено' : 'loaded'}`, 'info');
   };
@@ -316,7 +317,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               ))}
             </div>
             <div className="flex gap-2">
-              <a href={modelUrl} download={`${modelName || 'model'}.${exportFormat}`}
+              <a href={modelDownloadUrl || modelUrl} download={`${modelName || 'model'}.${exportFormat}`}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-medium rounded-lg">
                 <Download className="w-3.5 h-3.5" />{t.studio.export.download}
               </a>
@@ -523,7 +524,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
                     </button>
                   ))}
                 </div>
-                <a href={modelUrl} download={`${modelName || 'model'}.${exportFormat}`}
+                <a href={modelDownloadUrl || modelUrl} download={`${modelName || 'model'}.${exportFormat}`}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-medium rounded-lg flex-shrink-0">
                   <Download className="w-3.5 h-3.5" />{t.studio.export.download}
                 </a>
