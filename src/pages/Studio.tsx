@@ -185,11 +185,13 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   };
 
   const handleDownload = async (targetFormat: string) => {
-    if (!modelDownloadUrl) return;
+    // Use modelDownloadUrl (original Tripo URL) or fall back to modelUrl (proxy)
+    const sourceUrl = modelDownloadUrl || modelUrl;
+    if (!sourceUrl) return;
     setDownloading(true);
     const filename = `${modelName || 'model'}.${targetFormat}`;
     try {
-      let downloadUrl = modelDownloadUrl;
+      let downloadUrl = sourceUrl;
 
       // If not GLB, convert via CloudConvert
       if (targetFormat !== 'glb') {
@@ -201,18 +203,24 @@ export default function Studio({ onClose, addToast }: StudioProps) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            source_url: modelDownloadUrl,
+            source_url: modelDownloadUrl || modelUrl,
             output_format: targetFormat,
           }),
         });
         const convData = await convRes.json();
         if (!convRes.ok || convData.error) {
-          throw new Error(convData.error || 'Conversion failed');
+          throw new Error(convData.details || convData.error || 'Conversion failed');
         }
         downloadUrl = convData.url;
       }
 
+      // For GLB - use proxy URL which always works
+      if (targetFormat === 'glb') {
+        downloadUrl = modelUrl || sourceUrl;
+      }
+
       const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -225,7 +233,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       addToast(isRu ? 'Файл скачан!' : 'File downloaded!', 'success');
     } catch (err) {
       console.error('Download failed:', err);
-      addToast(isRu ? 'Ошибка скачивания. Попробуйте ещё раз.' : 'Download failed. Please try again.', 'error');
+      addToast(isRu ? `Ошибка: ${String(err)}` : `Error: ${String(err)}`, 'error');
     } finally {
       setDownloading(false);
     }
