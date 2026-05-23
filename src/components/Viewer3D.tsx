@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { RotateCw, ZoomIn, Maximize2 } from 'lucide-react';
+import { RotateCw, Maximize2, Minimize2 } from 'lucide-react';
 import { useLang } from '../lib/i18n';
 
 interface Viewer3DProps {
@@ -23,6 +23,7 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
   const modelRef = useRef<THREE.Object3D | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -41,7 +42,7 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
@@ -52,33 +53,34 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
     controls.dampingFactor = 0.05;
     controls.minDistance = 0.5;
     controls.maxDistance = 50;
+    controls.enablePan = true;
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
     controlsRef.current = controls;
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
-
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
     dirLight.position.set(5, 10, 5);
     dirLight.castShadow = true;
     scene.add(dirLight);
-
     const fillLight = new THREE.DirectionalLight(0x4dd9f5, 0.5);
     fillLight.position.set(-5, -2, -5);
     scene.add(fillLight);
-
     const rimLight = new THREE.PointLight(0x60a5fa, 0.8, 20);
     rimLight.position.set(-3, 3, -3);
     scene.add(rimLight);
 
     // Grid
-    const grid = new THREE.GridHelper(20, 40, 0x1a2030, 0x1a2030);
-    scene.add(grid);
+    scene.add(new THREE.GridHelper(20, 40, 0x1a2030, 0x1a2030));
 
-    // Default placeholder cube
-    const geom = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, metalness: 0.5, roughness: 0.3, wireframe: false });
-    const cube = new THREE.Mesh(geom, mat);
+    // Placeholder cube
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0x06b6d4, metalness: 0.5, roughness: 0.3 })
+    );
     cube.castShadow = true;
     scene.add(cube);
     modelRef.current = cube;
@@ -87,9 +89,7 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
     const animate = () => {
       frameId = requestAnimationFrame(animate);
       controls.update();
-      if (!modelUrl && modelRef.current) {
-        modelRef.current.rotation.y += 0.005;
-      }
+      if (!modelUrl && modelRef.current) modelRef.current.rotation.y += 0.005;
       renderer.render(scene, camera);
     };
     animate();
@@ -107,27 +107,21 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
     };
   }, []);
 
   useEffect(() => {
     if (!modelUrl || !sceneRef.current) return;
     const scene = sceneRef.current;
-
     setLoading(true);
     setError('');
 
-    // Remove old model
-    if (modelRef.current) {
-      scene.remove(modelRef.current);
-      modelRef.current = null;
-    }
+    if (modelRef.current) { scene.remove(modelRef.current); modelRef.current = null; }
 
     const ext = format?.toLowerCase() || 'glb';
 
     const onLoaded = (obj: THREE.Object3D) => {
-      // Center and scale
       const box = new THREE.Box3().setFromObject(obj);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
@@ -144,43 +138,45 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
     };
 
     if (ext === 'glb' || ext === 'gltf') {
-      const loader = new GLTFLoader();
-      loader.load(modelUrl, (gltf) => onLoaded(gltf.scene), undefined, (e) => {
-        setError(String(e));
-        setLoading(false);
-      });
+      new GLTFLoader().load(modelUrl, gltf => onLoaded(gltf.scene), undefined, e => { setError(String(e)); setLoading(false); });
     } else if (ext === 'obj') {
-      const loader = new OBJLoader();
-      loader.load(modelUrl, onLoaded, undefined, (e) => {
-        setError(String(e));
-        setLoading(false);
-      });
+      new OBJLoader().load(modelUrl, onLoaded, undefined, e => { setError(String(e)); setLoading(false); });
     } else if (ext === 'stl') {
-      const loader = new STLLoader();
-      loader.load(modelUrl, (geometry) => {
-        const mat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, metalness: 0.3, roughness: 0.5 });
-        const mesh = new THREE.Mesh(geometry, mat);
-        onLoaded(mesh);
-      }, undefined, (e) => {
-        setError(String(e));
-        setLoading(false);
-      });
+      new STLLoader().load(modelUrl, geometry => {
+        onLoaded(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x06b6d4, metalness: 0.3, roughness: 0.5 })));
+      }, undefined, e => { setError(String(e)); setLoading(false); });
     } else {
-      setError('Unsupported format for preview');
+      setError('Unsupported format');
       setLoading(false);
     }
   }, [modelUrl, format]);
 
-  const resetCamera = () => {
+  const resetCamera = useCallback(() => {
     cameraRef.current?.position.set(3, 2, 3);
     controlsRef.current?.reset();
-  };
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const el = containerRef.current?.parentElement;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
 
   return (
-    <div className="relative w-full h-full bg-gray-900 rounded-xl overflow-hidden">
+    <div className="relative w-full h-full bg-gray-900 overflow-hidden">
       <div ref={containerRef} className="w-full h-full" />
 
-      {/* Loading overlay */}
+      {/* Loading */}
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3">
@@ -190,44 +186,24 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
         </div>
       )}
 
-      {/* Error overlay */}
+      {/* Error */}
       {error && !loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
-          <div className="text-center px-4">
-            <p className="text-red-400 text-sm">{error}</p>
-          </div>
+          <p className="text-red-400 text-sm px-4 text-center">{error}</p>
         </div>
       )}
 
-      {/* Controls hint */}
-      {!loading && !error && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/40 backdrop-blur px-3 py-1.5 rounded-full">
-          <span className="text-gray-500 text-xs">{t.studio.viewer.rotate}</span>
-          <span className="text-gray-700">·</span>
-          <span className="text-gray-500 text-xs">{t.studio.viewer.zoom}</span>
-        </div>
-      )}
-
-      {/* Toolbar */}
+      {/* Toolbar — only Reset and Fullscreen, both working */}
       <div className="absolute top-3 right-3 flex flex-col gap-1.5">
-        <button
-          onClick={resetCamera}
+        <button onClick={resetCamera}
           className="w-8 h-8 bg-gray-800/80 backdrop-blur border border-white/10 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-          title="Reset camera"
-        >
+          title="Reset camera">
           <RotateCw className="w-3.5 h-3.5" />
         </button>
-        <button
+        <button onClick={toggleFullscreen}
           className="w-8 h-8 bg-gray-800/80 backdrop-blur border border-white/10 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-          title="Zoom fit"
-        >
-          <ZoomIn className="w-3.5 h-3.5" />
-        </button>
-        <button
-          className="w-8 h-8 bg-gray-800/80 backdrop-blur border border-white/10 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-          title="Fullscreen"
-        >
-          <Maximize2 className="w-3.5 h-3.5" />
+          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
         </button>
       </div>
     </div>

@@ -44,6 +44,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [userModels, setUserModels] = useState<Model[]>([]);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [generationCount, setGenerationCount] = useState(0);
+  const [countLoaded, setCountLoaded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -76,7 +77,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       setUserEmail(data.user?.email ?? null);
       const q = supabase.from('models').select('id', { count: 'exact', head: true }).eq('source_type', 'ai_generated');
       if (uid) q.eq('user_id', uid); else q.is('user_id', null);
-      q.then(({ count }) => setGenerationCount(count ?? 0));
+      q.then(({ count }) => { setGenerationCount(count ?? 0); setCountLoaded(true); });
     });
   }, []);
 
@@ -207,7 +208,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
         <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={t.studio.generate.placeholder} rows={5}
           className="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 resize-none" />
       </div>
-      <button onClick={handleGenerate} disabled={generating || !prompt.trim() || remaining === 0}
+      <button onClick={handleGenerate} disabled={generating || !prompt.trim() || (countLoaded && remaining === 0)}
         className="w-full flex items-center justify-center gap-2 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium text-sm rounded-xl transition-all">
         {generating ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t.studio.generate.generating}</> : <><Sparkles className="w-4 h-4" />{t.studio.generate.button}</>}
       </button>
@@ -507,7 +508,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
                 placeholder={isRu ? 'Опишите 3D-модель...' : 'Describe your 3D model...'}
                 className="flex-1 bg-gray-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-cyan-500/50" />
-              <button onClick={handleGenerate} disabled={generating || !prompt.trim() || remaining === 0}
+              <button onClick={handleGenerate} disabled={generating || !prompt.trim() || (countLoaded && remaining === 0)}
                 className="w-12 h-12 flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-all flex-shrink-0">
                 {generating ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Sparkles className="w-5 h-5" />}
               </button>
@@ -538,7 +539,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
               placeholder={t.studio.generate.placeholder}
               className="flex-1 bg-gray-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-cyan-500/50" />
-            <button onClick={handleGenerate} disabled={generating || !prompt.trim() || remaining === 0}
+            <button onClick={handleGenerate} disabled={generating || !prompt.trim() || (countLoaded && remaining === 0)}
               className="flex items-center gap-2 px-6 py-3 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium text-sm rounded-xl transition-all">
               {generating ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t.studio.generate.generating}</> : <><Sparkles className="w-4 h-4" />{t.studio.generate.button}</>}
             </button>
