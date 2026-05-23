@@ -37,6 +37,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [modelFormat, setModelFormat] = useState<string>('glb');
   const [modelName, setModelName] = useState('');
   const [modelDownloadUrl, setModelDownloadUrl] = useState<string | undefined>();
+  const [downloading, setDownloading] = useState(false);
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [librarySearch, setLibrarySearch] = useState('');
   const [libraryLoaded, setLibraryLoaded] = useState(false);
@@ -184,8 +185,10 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   };
 
   const handleDownload = async (url: string, filename: string) => {
+    setDownloading(true);
     try {
-      const response = await fetch(url);
+      const downloadUrl = modelDownloadUrl || url;
+      const response = await fetch(downloadUrl);
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -197,6 +200,8 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error('Download failed:', err);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -334,9 +339,11 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               ))}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.${exportFormat}`)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-medium rounded-lg">
-                <Download className="w-3.5 h-3.5" />{t.studio.export.download}
+              <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.glb`)}
+                disabled={downloading}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg">
+                {downloading ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                {downloading ? (isRu ? 'Загрузка...' : 'Loading...') : t.studio.export.download}
               </button>
               <button onClick={handleCopyLink}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg border border-white/5">
@@ -534,16 +541,18 @@ export default function Studio({ onClose, addToast }: StudioProps) {
             {modelUrl && (
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 gap-2">
                 <div className="flex gap-1.5 overflow-x-auto flex-1">
-                  {EXPORT_FORMATS.slice(0, 3).map(f => (
+                  {EXPORT_FORMATS.map(f => (
                     <button key={f} onClick={() => setExportFormat(f)}
                       className={`px-2.5 py-1 text-xs rounded-lg flex-shrink-0 transition-all ${exportFormat === f ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-gray-800 text-gray-500 border border-white/5'}`}>
                       {f.toUpperCase()}
                     </button>
                   ))}
                 </div>
-                <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.${exportFormat}`)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-medium rounded-lg flex-shrink-0">
-                  <Download className="w-3.5 h-3.5" />{t.studio.export.download}
+                <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.glb`)}
+                  disabled={downloading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg flex-shrink-0">
+                  {downloading ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  {t.studio.export.download}
                 </button>
               </div>
             )}
