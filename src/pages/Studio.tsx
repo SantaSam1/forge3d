@@ -183,6 +183,23 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     if (modelUrl) { navigator.clipboard.writeText(modelUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }
   };
 
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Download failed:', err);
+    }
+  };
+
   const statusIcon = (status: string) => {
     if (status === 'ready') return <Check className="w-3 h-3 text-green-400" />;
     if (status === 'processing') return <Clock className="w-3 h-3 text-yellow-400 animate-pulse" />;
@@ -317,10 +334,10 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               ))}
             </div>
             <div className="flex gap-2">
-              <a href={modelDownloadUrl || modelUrl} download={`${modelName || 'model'}.${exportFormat}`}
+              <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.${exportFormat}`)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-medium rounded-lg">
                 <Download className="w-3.5 h-3.5" />{t.studio.export.download}
-              </a>
+              </button>
               <button onClick={handleCopyLink}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg border border-white/5">
                 {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Link2 className="w-3.5 h-3.5" />}
@@ -524,10 +541,10 @@ export default function Studio({ onClose, addToast }: StudioProps) {
                     </button>
                   ))}
                 </div>
-                <a href={modelDownloadUrl || modelUrl} download={`${modelName || 'model'}.${exportFormat}`}
+                <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.${exportFormat}`)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-medium rounded-lg flex-shrink-0">
                   <Download className="w-3.5 h-3.5" />{t.studio.export.download}
-                </a>
+                </button>
               </div>
             )}
           </div>
