@@ -184,10 +184,34 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     if (modelUrl) { navigator.clipboard.writeText(modelUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }
   };
 
-  const handleDownload = async (url: string, filename: string) => {
+  const handleDownload = async (targetFormat: string) => {
+    if (!modelDownloadUrl) return;
     setDownloading(true);
+    const filename = `${modelName || 'model'}.${targetFormat}`;
     try {
-      const downloadUrl = modelDownloadUrl || url;
+      let downloadUrl = modelDownloadUrl;
+
+      // If not GLB, convert via CloudConvert
+      if (targetFormat !== 'glb') {
+        addToast(isRu ? `Конвертация в ${targetFormat.toUpperCase()}...` : `Converting to ${targetFormat.toUpperCase()}...`, 'info');
+        const convRes = await fetch(`${SUPABASE_URL}/functions/v1/convert-3d-model`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            source_url: modelDownloadUrl,
+            output_format: targetFormat,
+          }),
+        });
+        const convData = await convRes.json();
+        if (!convRes.ok || convData.error) {
+          throw new Error(convData.error || 'Conversion failed');
+        }
+        downloadUrl = convData.url;
+      }
+
       const response = await fetch(downloadUrl);
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -198,8 +222,10 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
+      addToast(isRu ? 'Файл скачан!' : 'File downloaded!', 'success');
     } catch (err) {
       console.error('Download failed:', err);
+      addToast(isRu ? 'Ошибка скачивания. Попробуйте ещё раз.' : 'Download failed. Please try again.', 'error');
     } finally {
       setDownloading(false);
     }
@@ -339,7 +365,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               ))}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.glb`)}
+              <button onClick={() => handleDownload(exportFormat)}
                 disabled={downloading}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg">
                 {downloading ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -548,7 +574,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
                     </button>
                   ))}
                 </div>
-                <button onClick={() => handleDownload(modelDownloadUrl || modelUrl || '', `${modelName || 'model'}.glb`)}
+                <button onClick={() => handleDownload(exportFormat)}
                   disabled={downloading}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg flex-shrink-0">
                   {downloading ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-3.5 h-3.5" />}
