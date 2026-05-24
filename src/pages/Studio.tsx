@@ -51,6 +51,10 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageFileRef = useRef<HTMLInputElement>(null);
+  const [imagePreview, setImagePreview] = useState<string | undefined>();
+  const [imageFile, setImageFile] = useState<File | undefined>();
+  const [generatingFromImage, setGeneratingFromImage] = useState(false);
 
   const isRu = lang === 'ru';
 
@@ -149,6 +153,80 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     setModelUrl(URL.createObjectURL(file)); setModelFormat(ext);
     setModelName(file.name.replace(/\.[^.]+$/, ''));
     addToast(t.messages.uploadSuccess, 'success');
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageGenerate = async () => {
+    if (!imageFile) return;
+    if (remaining === 0) {
+      addToast(isRu ? 'Лимит исчерпан. Перейдите на Pro.' : 'Free limit reached. Upgrade to Pro.', 'error');
+      return;
+    }
+    setGeneratingFromImage(true);
+    addToast(isRu ? 'Создание 3D из фото...' : 'Creating 3D from photo...', 'info');
+    try {
+      const FUNC_URL = `${SUPABASE_URL}/functions/v1/generate-3d-model`;
+      // Convert to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(imageFile);
+      });
+
+      const res = await fetch(FUNC_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_base64: base64,
+          image_mime: imageFile.type,
+          user_id: userId,
+        }),
+      });
+      const data = await res.json();
+      if (res.status === 429) { addToast(isRu ? 'Лимит исчерпан.' : 'Free limit reached.', 'error'); return; }
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed');
+      const { task_id, model_id } = data;
+      addToast(isRu ? 'Генерация 3D-модели... (~1-2 мин)' : 'Generating 3D model... (~1-2 min)', 'info');
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        if (attempts >= 40) throw new Error('Timeout');
+        attempts++;
+        await new Promise(r => setTimeout(r, 3000));
+        const sr = await fetch(FUNC_URL, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id, model_id }),
+        });
+        const sd = await sr.json();
+        if (sd.status === 'success') {
+          const proxyUrl = `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(sd.url)}`;
+          setModelUrl(proxyUrl); setModelDownloadUrl(sd.url);
+          setModelFormat('glb'); setModelName(imageFile.name.replace(/\.[^.]+$/, ''));
+          setGenerationCount(c => c + 1);
+          addToast(isRu ? '3D-модель готова!' : '3D model ready!', 'success');
+          return;
+        }
+        if (sd.status === 'failed') throw new Error('Generation failed');
+        return poll();
+      };
+      await poll();
+    } catch (err) {
+      addToast(isRu ? `Ошибка: ${String(err)}` : `Error: ${String(err)}`, 'error');
+    } finally {
+      setGeneratingFromImage(false);
+    }
   };
 
   const loadLibrary = useCallback(async () => {
@@ -328,19 +406,71 @@ export default function Studio({ onClose, addToast }: StudioProps) {
           {activeDesktopTab === 'generate' && <DesktopGenerate />}
 
           {activeDesktopTab === 'upload' && (
-            <div className="flex flex-col gap-4">
-              <label className="text-xs font-medium text-gray-400 block">{t.studio.upload.label}</label>
-              <div onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-white/10 hover:border-cyan-500/30 rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer group">
-                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-cyan-500/10">
-                  <Upload className="w-5 h-5 text-gray-500 group-hover:text-cyan-400" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-300">{t.studio.upload.button}</p>
-                  <p className="text-xs text-gray-600 mt-1">{t.studio.upload.draghint}</p>
+            <div className="flex flex-col gap-5">
+              {/* 3D file upload */}
+              <div className="flex flex-col gap-3">
+                <label className="text-xs font-medium text-gray-400 block">{t.studio.upload.label}</label>
+                <div onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-white/10 hover:border-cyan-500/30 rounded-xl p-6 flex flex-col items-center gap-3 cursor-pointer group">
+                  <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center group-hover:bg-cyan-500/10">
+                    <Upload className="w-5 h-5 text-gray-500 group-hover:text-cyan-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-300">{t.studio.upload.button}</p>
+                    <p className="text-xs text-gray-600 mt-1">{t.studio.upload.hint}</p>
+                  </div>
                 </div>
               </div>
-              <p className="text-xs text-gray-600 text-center">{t.studio.upload.hint}</p>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-white/5" />
+                <span className="text-xs text-gray-600">{isRu ? 'или' : 'or'}</span>
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+
+              {/* Image to 3D */}
+              <div className="flex flex-col gap-3">
+                <label className="text-xs font-medium text-gray-400 block">
+                  {isRu ? 'Фото → 3D модель' : 'Photo → 3D model'}
+                </label>
+                <div onClick={() => imageFileRef.current?.click()}
+                  className="border-2 border-dashed border-purple-500/20 hover:border-purple-500/40 rounded-xl p-6 flex flex-col items-center gap-3 cursor-pointer group relative overflow-hidden">
+                  {imagePreview ? (
+                    <div className="relative w-full">
+                      <img src={imagePreview} alt="preview" className="w-full h-32 object-contain rounded-lg" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                        <p className="text-xs text-white">{isRu ? 'Нажмите чтобы изменить' : 'Click to change'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center group-hover:bg-purple-500/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                        </svg>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-gray-300">{isRu ? 'Загрузить фото' : 'Upload photo'}</p>
+                        <p className="text-xs text-gray-600 mt-1">JPG, PNG, WEBP {isRu ? '(макс. 10 МБ)' : '(max 10 MB)'}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {imageFile && (
+                  <button onClick={handleImageGenerate} disabled={generatingFromImage || remaining === 0}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium text-sm rounded-xl transition-all">
+                    {generatingFromImage
+                      ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{isRu ? 'Генерация...' : 'Generating...'}</>
+                      : <>{isRu ? '✨ Создать 3D из фото' : '✨ Create 3D from photo'}</>
+                    }
+                  </button>
+                )}
+                <p className="text-xs text-gray-600 text-center">
+                  {isRu ? 'Лучшие результаты: чёткое фото объекта на однотонном фоне' : 'Best results: clear photo of object on plain background'}
+                </p>
+              </div>
+              <input ref={imageFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleImageSelect} />
             </div>
           )}
 
@@ -487,7 +617,32 @@ export default function Studio({ onClose, addToast }: StudioProps) {
             <div className="p-4">
 
               {/* Library */}
-              {activeMobileTab === 'library' && (
+              {/* Mobile image-to-3D floating button when on generate tab */}
+            {activeMobileTab === 'generate' && (
+              <div className="px-4 pt-2 pb-0">
+                <button onClick={() => imageFileRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-medium rounded-xl transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                  </svg>
+                  {isRu ? 'Фото → 3D' : 'Photo → 3D'}
+                </button>
+                {imageFile && !generatingFromImage && (
+                  <button onClick={handleImageGenerate}
+                    className="mt-2 w-full flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium rounded-xl transition-all">
+                    ✨ {isRu ? `Создать 3D из "${imageFile.name}"` : `Create 3D from "${imageFile.name}"`}
+                  </button>
+                )}
+                {generatingFromImage && (
+                  <div className="mt-2 flex items-center justify-center gap-2 py-2 bg-purple-600/20 border border-purple-500/30 rounded-xl">
+                    <div className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                    <span className="text-xs text-purple-300">{isRu ? 'Генерация 3D из фото...' : 'Generating 3D from photo...'}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeMobileTab === 'library' && (
                 <>
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -649,6 +804,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       </nav>
 
       <input ref={fileInputRef} type="file" accept=".glb,.gltf,.obj,.stl,.fbx,.usdz" className="hidden" onChange={handleFileUpload} />
+      <input ref={imageFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleImageSelect} />
     </div>
   );
 }
