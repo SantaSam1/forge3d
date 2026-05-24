@@ -6,10 +6,12 @@ import FeaturesSection from './components/FeaturesSection';
 import PricingSection from './components/PricingSection';
 import Footer from './components/Footer';
 import Studio from './pages/Studio';
+import Library from './pages/Library';
 import Toast, { ToastData } from './components/Toast';
 
 function AppInner() {
   const [studioOpen, setStudioOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastData[]>([]);
 
   const addToast = useCallback((message: string, type: ToastData['type']) => {
@@ -24,6 +26,15 @@ function AppInner() {
   if (studioOpen) {
     return (
       <>
+        {libraryOpen && (
+          <Library
+            onClose={() => setLibraryOpen(false)}
+            onOpenInStudio={(url, name) => {
+              setLibraryOpen(false);
+              setStudioOpen(true);
+            }}
+          />
+        )}
         <Studio onClose={() => setStudioOpen(false)} addToast={addToast} />
         <Toast toasts={toasts} onRemove={removeToast} />
       </>
@@ -32,7 +43,13 @@ function AppInner() {
 
   return (
     <div className="bg-gray-950 min-h-screen">
-      <Header onOpenStudio={() => setStudioOpen(true)} />
+      <Header 
+        onOpenStudio={() => setStudioOpen(true)} 
+        onOpenLibrary={() => {
+          setStudioOpen(true);
+          setLibraryOpen(true);
+        }} 
+      />
       <main>
         <Hero onOpenStudio={() => setStudioOpen(true)} />
         <FeaturesSection />

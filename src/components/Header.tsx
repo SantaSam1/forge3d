@@ -7,9 +7,10 @@ import AuthModal from './AuthModal';
 
 interface HeaderProps {
   onOpenStudio: () => void;
+  onOpenLibrary: () => void;
 }
 
-export default function Header({ onOpenStudio }: HeaderProps) {
+export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
   const { t, lang, setLang } = useLang();
   const [menuOpen, setMenuOpen] = useState(false);
   const [authModal, setAuthModal] = useState<'login' | 'register' | null>(null);
@@ -31,7 +32,7 @@ export default function Header({ onOpenStudio }: HeaderProps) {
 
   const navItems = [
     { label: t.nav.studio, action: () => { onOpenStudio(); setMenuOpen(false); } },
-    { label: t.nav.library, action: () => { onOpenStudio(); setMenuOpen(false); } },
+    { label: t.nav.library, action: () => { onOpenLibrary(); setMenuOpen(false); } },
     { label: t.nav.pricing, action: () => setMenuOpen(false) },
     { label: t.nav.docs, action: () => setMenuOpen(false) },
   ];
