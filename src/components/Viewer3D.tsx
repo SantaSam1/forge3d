@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
-import { RotateCw, ZoomIn, Hand } from 'lucide-react';
+import { RotateCw, ZoomIn } from 'lucide-react';
 import { useLang } from '../lib/i18n';
 
 interface Viewer3DProps {
@@ -209,15 +209,7 @@ export default function Viewer3D({ modelUrl, format }: Viewer3DProps) {
         </div>
       )}
 
-      {/* Mobile touch hint */}
-      {!loading && !error && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full z-10">
-          <Hand className="w-3.5 h-3.5 text-gray-400" />
-          <span className="text-gray-400 text-xs">{t.studio.viewer.rotate}</span>
-        </div>
-      )}
-
-      {/* Floating toolbar - desktop only */}
+            {/* Floating toolbar - desktop only */}
       <div className="hidden lg:flex absolute top-4 right-4 flex-col gap-2 z-10">
         <button
           onClick={resetCamera}
