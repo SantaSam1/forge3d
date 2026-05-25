@@ -26,16 +26,16 @@ function AppInner() {
   if (studioOpen) {
     return (
       <>
-        {libraryOpen && (
-          <Library
-            onClose={() => setLibraryOpen(false)}
-            onOpenInStudio={(url, name) => {
-              setLibraryOpen(false);
-              setStudioOpen(true);
-            }}
-          />
-        )}
         <Studio onClose={() => setStudioOpen(false)} addToast={addToast} />
+        <Toast toasts={toasts} onRemove={removeToast} />
+      </>
+    );
+  }
+
+  if (libraryOpen) {
+    return (
+      <>
+        <Library onClose={() => setLibraryOpen(false)} onOpenInStudio={() => setStudioOpen(true)} />
         <Toast toasts={toasts} onRemove={removeToast} />
       </>
     );
@@ -43,13 +43,7 @@ function AppInner() {
 
   return (
     <div className="bg-gray-950 min-h-screen">
-      <Header 
-        onOpenStudio={() => setStudioOpen(true)} 
-        onOpenLibrary={() => {
-          setStudioOpen(true);
-          setLibraryOpen(true);
-        }} 
-      />
+      <Header onOpenStudio={() => setStudioOpen(true)} onOpenLibrary={() => setLibraryOpen(true)} />
       <main>
         <Hero onOpenStudio={() => setStudioOpen(true)} />
         <FeaturesSection />

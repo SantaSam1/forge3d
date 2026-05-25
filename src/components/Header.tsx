@@ -42,7 +42,6 @@ export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
       <header className="fixed top-0 left-0 right-0 z-50 bg-gray-950 border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Logo */}
             <button onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
                 <Box className="w-4 h-4 text-white" />
@@ -50,7 +49,6 @@ export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
               <span className="text-white font-semibold text-lg tracking-tight">3D-Prin</span>
             </button>
 
-            {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-1">
               {navItems.map((item) => (
                 <button key={item.label} onClick={item.action}
@@ -60,7 +58,6 @@ export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
               ))}
             </nav>
 
-            {/* Right */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
                 <Globe className="w-3.5 h-3.5 text-gray-400 ml-1" />
@@ -90,6 +87,10 @@ export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
                         className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
                         <User className="w-4 h-4" />{lang === 'ru' ? 'Открыть студию' : 'Open Studio'}
                       </button>
+                      <button onClick={() => { onOpenLibrary(); setUserMenuOpen(false); }}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
+                        <Box className="w-4 h-4" />{lang === 'ru' ? 'Библиотека' : 'Library'}
+                      </button>
                       <button onClick={handleSignOut}
                         className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
                         <LogOut className="w-4 h-4" />{lang === 'ru' ? 'Выйти' : 'Sign out'}
@@ -115,7 +116,6 @@ export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
           </div>
         </div>
 
-        {/* Mobile menu */}
         {menuOpen && (
           <div className="md:hidden border-t border-white/5 bg-gray-950">
             <div className="px-4 py-3 flex flex-col gap-1">
