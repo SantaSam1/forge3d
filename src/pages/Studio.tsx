@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Sparkles, Upload, BookOpen, RefreshCw, Download, Link2, X,
   ArrowLeft, Cpu, Layers, ChevronDown, Search, Check, Home, History, User, Menu, AlertCircle, Clock,
-  Package
+  Package, Send, Wand2
 } from 'lucide-react';
 import Viewer3D from '../components/Viewer3D';
 import AssetBrowser from '../components/AssetBrowser';
@@ -58,6 +58,12 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [generatingFromImage, setGeneratingFromImage] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
+
+  // AI Agent state
+  const [agentInput, setAgentInput] = useState('');
+  const [agentMessages, setAgentMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const agentScrollRef = useRef<HTMLDivElement>(null);
 
   const isRu = lang === 'ru';
 
@@ -391,6 +397,37 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     </div>
   );
 
+  // Auto-scroll agent messages
+  useEffect(() => {
+    if (agentScrollRef.current) {
+      agentScrollRef.current.scrollTop = agentScrollRef.current.scrollHeight;
+    }
+  }, [agentMessages]);
+
+  const handleAgentSend = async () => {
+    const userText = agentInput.trim();
+    if (!userText || agentLoading) return;
+    setAgentMessages(prev => [...prev, { role: 'user', text: userText }]);
+    setAgentInput('');
+    setAgentLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('groq-prompt', {
+        body: { userText, isRu },
+      });
+      if (error || !data?.prompt) throw new Error(error?.message || 'No prompt');
+      const result = data.prompt as string;
+      setAgentMessages(prev => [...prev, { role: 'assistant', text: result }]);
+    } catch {
+      setAgentMessages(prev => [...prev, {
+        role: 'assistant',
+        text: isRu ? '⚠️ Ошибка. Проверьте Edge Function groq-prompt в Supabase.' : '⚠️ Error. Check groq-prompt Edge Function in Supabase.'
+      }]);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+
   return (
     <div className="fixed inset-0 z-40 bg-gray-950 flex flex-col lg:flex-row w-screen h-screen overflow-hidden">
 
@@ -533,6 +570,56 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               <span className="text-xs text-gray-400 truncate flex-1">{m.name}</span>
             </div>
           ))}
+        </div>
+
+        {/* AI Agent — Groq prompt generator */}
+        <div className="border-t border-white/5 p-3 flex-shrink-0">
+          <div className="flex items-center gap-2 mb-2">
+            <Wand2 className="w-3.5 h-3.5 text-purple-400" />
+            <p className="text-xs font-medium text-gray-400">{isRu ? 'AI Генератор промптов' : 'AI Prompt Generator'}</p>
+          </div>
+          {/* Messages */}
+          {agentMessages.length > 0 && (
+            <div ref={agentScrollRef} className="max-h-32 overflow-y-auto mb-2 flex flex-col gap-1.5">
+              {agentMessages.map((msg, i) => (
+                <div key={i}
+                  onClick={() => msg.role === 'assistant' && setPrompt(msg.text)}
+                  className={`text-[11px] px-2.5 py-1.5 rounded-lg leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-white/5 text-gray-400 text-right'
+                      : 'bg-purple-500/10 text-purple-300 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20'
+                  }`}
+                >
+                  {msg.role === 'assistant' && (
+                    <span className="block text-[9px] text-purple-400 mb-0.5">
+                      {isRu ? '↑ нажмите чтобы применить' : '↑ click to apply'}
+                    </span>
+                  )}
+                  {msg.text}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Input */}
+          <div className="flex gap-1.5">
+            <input
+              value={agentInput}
+              onChange={e => setAgentInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAgentSend()}
+              placeholder={isRu ? 'например: робот из будущего...' : 'e.g. futuristic robot...'}
+              className="flex-1 bg-gray-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-purple-500/50 min-w-0"
+            />
+            <button
+              onClick={handleAgentSend}
+              disabled={agentLoading || !agentInput.trim()}
+              className="flex items-center justify-center w-7 h-7 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-40 text-purple-400 rounded-lg flex-shrink-0 transition-all"
+            >
+              {agentLoading
+                ? <div className="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                : <Send className="w-3 h-3" />
+              }
+            </button>
+          </div>
         </div>
 
         {/* Desktop export */}
