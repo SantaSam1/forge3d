@@ -640,8 +640,7 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
             }`}
           >
             <Icon className="w-3.5 h-3.5" />
-            {isRu ? labelRu : label} </span>
-            )}
+            {isRu ? labelRu : label}
           </button>
         ))}
 
