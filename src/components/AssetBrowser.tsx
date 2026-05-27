@@ -768,11 +768,9 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
               <p className="text-gray-400 font-medium mb-1">
                 {isRu ? 'Модели не найдены' : 'No models found'}
               </p>
-              <p className="text-xs text-gray-600"> </p> className="mt-4 px-5 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-sm rounded-xl border border-orange-500/30 transition-all"
-                >
-                  {isRu ? '+ Добавить Sketchfab токен' : '+ Add Sketchfab Token'}
-                </button>
-              )}
+              <p className="text-xs text-gray-600">
+                {isRu ? 'Попробуйте изменить запрос или фильтры' : 'Try a different query or filters'}
+              </p>
             </div>
           </div>
         )}
