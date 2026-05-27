@@ -37,7 +37,9 @@ interface AssetBrowserProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SKETCHFAB_TOKEN = null; // Will be entered by user in settings
+// Token hardcoded — users don't need to enter anything
+const SKETCHFAB_TOKEN = 'f8a254d9b48c40e9befa26962a40abec';
+const POLY_PIZZA_KEY  = '98cbac2d31c944faa03c2d05922bee73';
 const POLY_PIZZA_URL = 'https://api.poly.pizza/v1';
 
 const SOURCES = [
@@ -74,7 +76,8 @@ async function searchSketchfab(
   query: string,
   page: number
 ): Promise<{ models: AssetModel[]; hasMore: boolean }> {
-    
+  if (!SKETCHFAB_TOKEN) return { models: [], hasMore: false };
+  
   try {
     const params = new URLSearchParams({
       q: query || 'low poly',
@@ -91,9 +94,9 @@ async function searchSketchfab(
       'license[]': 'by-nc-nd',
     });
 
-    const res = await fetch(
-  `https://gnoaqmurextrlxooqlvb.supabase.co/functions/v1/sketchfab-search?${params}`
-);
+    const res = await fetch(`https://api.sketchfab.com/v3/search?${params}`, {
+      headers: { Authorization: `Token ${SKETCHFAB_TOKEN}` },
+    });
 
     if (!res.ok) throw new Error(`Sketchfab: ${res.status}`);
     const data = await res.json();
@@ -119,10 +122,10 @@ async function searchSketchfab(
   }
 }
 
-async function downloadFromSketchfab(uid: string, token: string): Promise<string | null> {
+async function downloadFromSketchfab(uid: string): Promise<string | null> {
   try {
     const res = await fetch(`https://api.sketchfab.com/v3/models/${uid}/download`, {
-      headers: { Authorization: `Token ${token}` },
+      headers: { Authorization: `Token ${SKETCHFAB_TOKEN}` },
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -146,7 +149,9 @@ async function searchPolyPizza(
       format: 'glb',
     });
 
-    const res = await fetch(`${POLY_PIZZA_URL}/search?${params}`);
+    const res = await fetch(`${POLY_PIZZA_URL}/search?${params}`, {
+      headers: POLY_PIZZA_KEY ? { 'X-Auth-Token': POLY_PIZZA_KEY } : {},
+    });
     if (!res.ok) throw new Error(`Poly Pizza: ${res.status}`);
     const data = await res.json();
 
@@ -200,60 +205,6 @@ async function fetchLocalLibrary(
 
 // ─── SketchfabToken Modal ─────────────────────────────────────────────────────
 
-function SketchfabTokenModal({
-  onSave,
-  onClose,
-  isRu,
-}: {
-  onSave: (token: string) => void;
-  onClose: () => void;
-  isRu: boolean;
-}) {
-  const [val, setVal] = useState('');
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm rounded-2xl">
-      <div className="bg-gray-900 rounded-2xl border border-white/10 p-6 w-full max-w-sm mx-4 shadow-2xl">
-        <h3 className="text-white font-semibold mb-2">
-          {isRu ? 'Токен Sketchfab API' : 'Sketchfab API Token'}
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          {isRu
-            ? 'Получите токен на sketchfab.com/settings/password → API Token'
-            : 'Get your token at sketchfab.com/settings/password → API Token'}
-        </p>
-        <a
-          href="https://sketchfab.com/settings/password"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-cyan-400 underline mb-4 block"
-        >
-          sketchfab.com/settings/password ↗
-        </a>
-        <input
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
-          placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-          className="w-full bg-gray-800 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 mb-4"
-        />
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2 text-sm text-gray-400 border border-white/10 rounded-xl hover:bg-white/5"
-          >
-            {isRu ? 'Отмена' : 'Cancel'}
-          </button>
-          <button
-            onClick={() => val.trim() && onSave(val.trim())}
-            disabled={!val.trim()}
-            className="flex-1 py-2 text-sm text-white bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl"
-          >
-            {isRu ? 'Сохранить' : 'Save'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── ModelCard ────────────────────────────────────────────────────────────────
 
@@ -513,7 +464,6 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
   const [hasMore, setHasMore] = useState(true);
   const [preview, setPreview] = useState<AssetModel | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
-  const [showTokenModal, setShowTokenModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const loaderRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -550,7 +500,7 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
       }
 
       if (source === 'sketchfab' || source === 'all') {
-        if (sfToken) {
+        if (SKETCHFAB_TOKEN) {
           const sf = await searchSketchfab(debouncedQuery || category || 'low poly', pageNum);
           results.push(...sf.models);
           more = more || sf.hasMore;
@@ -569,7 +519,7 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
     } finally {
       setLoading(false);
     }
-  }, [source, debouncedQuery, category, sfToken]);
+  }, [source, debouncedQuery, category, SKETCHFAB_TOKEN]);
 
   useEffect(() => {
     if (isOpen) fetchModels(0, false);
@@ -618,11 +568,7 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
 
       // Sketchfab: need to fetch download URL
       if (model.source === 'sketchfab' && model.sketchfabUid) {
-         {
-          setShowTokenModal(true);
-          return;
-        }
-        const dlUrl = await downloadFromSketchfab(model.sketchfabUid, sfToken);
+        const dlUrl = await downloadFromSketchfab(model.sketchfabUid);
         if (dlUrl) {
           onImport(dlUrl, model.name, 'glb');
           setPreview(null);
@@ -635,11 +581,6 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
     }
   };
 
-  const handleSaveToken = (token: string) => {
-    setSfToken(token);
-    localStorage.setItem('sf_token', token);
-    setShowTokenModal(false);
-  };
 
   if (!isOpen) return null;
 
@@ -699,25 +640,13 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
             }`}
           >
             <Icon className="w-3.5 h-3.5" />
-            {isRu ? labelRu : label}
-            {id === 'sketchfab' && !sfToken && (
-              <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full ml-1">
-                {isRu ? 'Токен' : 'Token'}
-              </span>
+            {isRu ? labelRu : label} </span>
             )}
           </button>
         ))}
 
         <div className="flex-1" />
-
-        {/* Sketchfab token button */}
-        <button
-          onClick={() => setShowTokenModal(true)}
-          className="flex items-center gap-1.5 px-4 text-xs text-gray-600 hover:text-gray-300 flex-shrink-0 transition-colors"
-        >
-          <Zap className="w-3.5 h-3.5" />
-                  </button>
-      </div>
+</div>
 
       {/* ── Filters ── */}
       {showFilters && (
@@ -743,14 +672,7 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
       {/* ── Content ── */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 relative">
         {/* Token modal */}
-        {showTokenModal && (
-            onSave={handleSaveToken}
-            onClose={() => setShowTokenModal(false)}
-            isRu={isRu}
-          />
-        )}
-
-        {/* Status bar */}
+{/* Status bar */}
         <div className="flex items-center justify-between mb-4">
           <p className="text-xs text-gray-600">
             {loading && models.length === 0
@@ -846,15 +768,7 @@ export default function AssetBrowser({ isOpen, onClose, onImport, isRu = false }
               <p className="text-gray-400 font-medium mb-1">
                 {isRu ? 'Модели не найдены' : 'No models found'}
               </p>
-              <p className="text-xs text-gray-600">
-                {source === 'sketchfab' && !sfToken
-                  ? (isRu ? 'Добавьте API токен Sketchfab для поиска' : 'Add Sketchfab API token to search')
-                  : (isRu ? 'Попробуйте изменить запрос или фильтры' : 'Try a different query or filters')}
-              </p>
-              {source === 'sketchfab' && !sfToken && (
-                <button
-                  onClick={() => setShowTokenModal(true)}
-                  className="mt-4 px-5 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-sm rounded-xl border border-orange-500/30 transition-all"
+              <p className="text-xs text-gray-600"> </p> className="mt-4 px-5 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-sm rounded-xl border border-orange-500/30 transition-all"
                 >
                   {isRu ? '+ Добавить Sketchfab токен' : '+ Add Sketchfab Token'}
                 </button>
