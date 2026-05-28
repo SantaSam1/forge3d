@@ -8,9 +8,10 @@ import AuthModal from './AuthModal';
 interface HeaderProps {
   onOpenStudio: () => void;
   onOpenLibrary: () => void;
+  onNavigate?: (path: string) => void;
 }
 
-export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
+export default function Header({ onOpenStudio, onOpenLibrary, onNavigate }: HeaderProps) {
   const { t, lang, setLang } = useLang();
   const [menuOpen, setMenuOpen] = useState(false);
   const [authModal, setAuthModal] = useState<'login' | 'register' | null>(null);
@@ -31,10 +32,10 @@ export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
   const userInitial = userName.charAt(0).toUpperCase();
 
   const navItems = [
-    { label: t.nav.studio, action: () => { onOpenStudio(); setMenuOpen(false); } },
+    { label: t.nav.studio,  action: () => { onOpenStudio(); setMenuOpen(false); } },
     { label: t.nav.library, action: () => { onOpenLibrary(); setMenuOpen(false); } },
-    { label: t.nav.pricing, action: () => setMenuOpen(false) },
-    { label: t.nav.docs, action: () => setMenuOpen(false) },
+    { label: t.nav.pricing, action: () => { onNavigate?.('/pricing'); setMenuOpen(false); } },
+    { label: t.nav.docs,    action: () => { onNavigate?.('/about'); setMenuOpen(false); } },
   ];
 
   return (
@@ -42,7 +43,7 @@ export default function Header({ onOpenStudio, onOpenLibrary }: HeaderProps) {
       <header className="fixed top-0 left-0 right-0 z-50 bg-gray-950 border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <button onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
+            <button onClick={() => { setMenuOpen(false); onNavigate?.('/'); }} className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
                 <Box className="w-4 h-4 text-white" />
               </div>
