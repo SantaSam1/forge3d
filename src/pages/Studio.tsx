@@ -397,10 +397,13 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     </div>
   );
 
-  // Auto-scroll agent messages
+  // Auto-scroll agent messages — preserve focus
   useEffect(() => {
     if (agentScrollRef.current) {
+      const focused = document.activeElement as HTMLElement | null;
       agentScrollRef.current.scrollTop = agentScrollRef.current.scrollHeight;
+      // Restore focus after DOM update
+      requestAnimationFrame(() => focused?.focus());
     }
   }, [agentMessages]);
 
@@ -579,10 +582,10 @@ export default function Studio({ onClose, addToast }: StudioProps) {
             <p className="text-xs font-medium text-gray-400">{isRu ? 'AI Генератор промптов' : 'AI Prompt Generator'}</p>
           </div>
           {/* Messages */}
-          {agentMessages.length > 0 && (
-            <div ref={agentScrollRef} className="max-h-32 overflow-y-auto mb-2 flex flex-col gap-1.5">
-              {agentMessages.map((msg, i) => (
+          <div ref={agentScrollRef} className={`overflow-y-auto flex flex-col gap-1.5 transition-all ${agentMessages.length > 0 ? 'max-h-32 mb-2' : 'max-h-0'}`}>
+            {agentMessages.map((msg, i) => (
                 <div key={i}
+                  onMouseDown={e => e.preventDefault()}
                   onClick={() => msg.role === 'assistant' && setPrompt(msg.text)}
                   className={`text-[11px] px-2.5 py-1.5 rounded-lg leading-relaxed ${
                     msg.role === 'user'
@@ -598,8 +601,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
                   {msg.text}
                 </div>
               ))}
-            </div>
-          )}
+          </div>
           {/* Input */}
           <div className="flex gap-1.5">
             <input
