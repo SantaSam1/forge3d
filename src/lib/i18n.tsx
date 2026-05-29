@@ -58,7 +58,6 @@ const translations = {
         emptyHint: 'Generate, upload, or pick from the library',
         loading: 'Loading model...',
         rotate: 'Drag to rotate',
-        rotate: 'Click & drag to rotate',
         zoom: 'Scroll to zoom',
       },
       export: {
@@ -208,7 +207,6 @@ const translations = {
         emptyHint: 'Создайте, загрузите или выберите из библиотеки',
         loading: 'Загрузка модели...',
         rotate: 'Перетащите для вращения',
-        rotate: 'Нажмите и перетащите для вращения',
         zoom: 'Прокрутите для масштабирования',
       },
       export: {
