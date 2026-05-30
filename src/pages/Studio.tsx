@@ -853,27 +853,34 @@ export default function Studio({ onClose, addToast }: StudioProps) {
           </div>
         )}
 
-        {/* ═══ MOBILE STICKY PROMPT ═══ */}
+        {/* ═══ MOBILE BOTTOM PANEL (prompt + groq) ═══ */}
         {activeMobileTab === 'generate' && (
-          <div className="sticky bottom-16 p-3 border-t border-white/5 bg-gray-950/90 backdrop-blur-xl lg:hidden flex-shrink-0">
-            {remaining > 0 && remaining <= 2 && (
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="w-3 h-3 text-yellow-400" />
-                <p className="text-xs text-yellow-300">{isRu ? `Осталось ${remaining} генерации` : `${remaining} generation${remaining !== 1 ? 's' : ''} remaining`}</p>
+          <div className="lg:hidden flex-shrink-0 border-t border-white/5 bg-gray-950 pb-safe"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+
+            {/* Generate prompt row */}
+            <div className="px-3 pt-3 pb-2">
+              {remaining > 0 && remaining <= 2 && (
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="w-3 h-3 text-yellow-400" />
+                  <p className="text-xs text-yellow-300">{isRu ? `Осталось ${remaining} генерации` : `${remaining} generations remaining`}</p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input value={prompt} onChange={e => setPrompt(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
+                  placeholder={isRu ? 'Опишите 3D-модель...' : 'Describe your 3D model...'}
+                  className="flex-1 bg-gray-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-cyan-500/50" />
+                <button onClick={handleGenerate} disabled={generating || !prompt.trim() || (countLoaded && remaining === 0)}
+                  className="w-12 h-12 flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-all flex-shrink-0">
+                  {generating ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                </button>
               </div>
-            )}
-            <div className="flex gap-2">
-              <input value={prompt} onChange={e => setPrompt(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
-                placeholder={isRu ? 'Опишите 3D-модель...' : 'Describe your 3D model...'}
-                className="flex-1 bg-gray-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-cyan-500/50" />
-              <button onClick={handleGenerate} disabled={generating || !prompt.trim() || (countLoaded && remaining === 0)}
-                className="w-12 h-12 flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-xl transition-all flex-shrink-0">
-                {generating ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Sparkles className="w-5 h-5" />}
-              </button>
             </div>
+
+            {/* Export row */}
             {modelUrl && (
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5 gap-2">
+              <div className="flex items-center justify-between px-3 pb-2 gap-2 border-t border-white/5 pt-2">
                 <div className="flex gap-1.5 overflow-x-auto flex-1">
                   {EXPORT_FORMATS.map(f => (
                     <button key={f} onClick={() => setExportFormat(f)}
@@ -882,53 +889,52 @@ export default function Studio({ onClose, addToast }: StudioProps) {
                     </button>
                   ))}
                 </div>
-                <button onClick={() => handleDownload(exportFormat)}
-                  disabled={downloading}
+                <button onClick={() => handleDownload(exportFormat)} disabled={downloading}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg flex-shrink-0">
                   {downloading ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   {t.studio.export.download}
                 </button>
               </div>
             )}
-          </div>
-        )}
 
-        {/* ═══ MOBILE GROQ AGENT ═══ */}
-        {activeMobileTab === 'generate' && (
-          <div className="lg:hidden px-3 pb-2 bg-gray-950/90 backdrop-blur-xl border-t border-white/5 flex-shrink-0">
-            <div className="flex items-center gap-2 py-2">
-              <Wand2 className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-              <p className="text-xs font-medium text-gray-400">{isRu ? 'AI Генератор промптов' : 'AI Prompt Generator'}</p>
-            </div>
-            <div ref={agentScrollRef} className={`overflow-y-auto flex flex-col gap-1 transition-all ${agentMessages.length > 0 ? 'max-h-24 mb-2' : 'max-h-0'}`}>
-              {agentMessages.map((msg, i) => (
-                <div key={i}
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => msg.role === 'assistant' && setPrompt(msg.text)}
-                  className={`text-[11px] px-2 py-1 rounded-lg leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-white/5 text-gray-400 text-right'
-                      : 'bg-purple-500/10 text-purple-300 border border-purple-500/20 cursor-pointer hover:bg-purple-500/20'
-                  }`}>
-                  {msg.role === 'assistant' && <span className="block text-[9px] text-purple-400 mb-0.5">{isRu ? '↑ нажмите чтобы применить' : '↑ click to apply'}</span>}
-                  {msg.text}
+            {/* Groq Agent */}
+            <div className="px-3 pb-3 border-t border-white/5 pt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Wand2 className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                <p className="text-xs font-medium text-gray-400">{isRu ? 'AI Генератор промптов' : 'AI Prompt Generator'}</p>
+              </div>
+              {agentMessages.length > 0 && (
+                <div ref={agentScrollRef} className="max-h-20 overflow-y-auto flex flex-col gap-1 mb-2">
+                  {agentMessages.map((msg, i) => (
+                    <div key={i}
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => msg.role === 'assistant' && setPrompt(msg.text)}
+                      className={`text-[11px] px-2 py-1 rounded-lg leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-white/5 text-gray-400 text-right'
+                          : 'bg-purple-500/10 text-purple-300 border border-purple-500/20 cursor-pointer'
+                      }`}>
+                      {msg.role === 'assistant' && <span className="block text-[9px] text-purple-400 mb-0.5">{isRu ? '↑ нажмите чтобы применить' : '↑ tap to apply'}</span>}
+                      {msg.text}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-1.5">
-              <input
-                value={agentInput}
-                onChange={e => setAgentInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAgentSend()}
-                placeholder={isRu ? 'например: робот из будущего...' : 'e.g. futuristic robot...'}
-                className="flex-1 bg-gray-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-purple-500/50 min-w-0"
-              />
-              <button onClick={handleAgentSend} disabled={agentLoading || !agentInput.trim()}
-                className="w-8 h-8 flex items-center justify-center bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-40 text-purple-400 rounded-lg flex-shrink-0">
-                {agentLoading
-                  ? <div className="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
-                  : <Send className="w-3 h-3" />}
-              </button>
+              )}
+              <div className="flex gap-1.5">
+                <input
+                  value={agentInput}
+                  onChange={e => setAgentInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAgentSend()}
+                  placeholder={isRu ? 'например: робот из будущего...' : 'e.g. futuristic robot...'}
+                  className="flex-1 bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-purple-500/50 min-w-0"
+                />
+                <button onClick={handleAgentSend} disabled={agentLoading || !agentInput.trim()}
+                  className="w-10 h-10 flex items-center justify-center bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-40 text-purple-400 rounded-lg flex-shrink-0">
+                  {agentLoading
+                    ? <div className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                    : <Send className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           </div>
         )}

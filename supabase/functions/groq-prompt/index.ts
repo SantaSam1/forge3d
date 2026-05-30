@@ -8,26 +8,22 @@ Deno.serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+  if (!GROQ_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: 'GROQ_API_KEY secret not set in Supabase Edge Functions' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
     const { userText, isRu } = await req.json();
-
-    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
-    if (!GROQ_API_KEY) {
+    if (!userText) {
       return new Response(
-        JSON.stringify({ error: 'GROQ_API_KEY not set in Supabase secrets' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'userText is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const systemPrompt = `You are an expert at writing prompts for AI 3D model generation tools like Meshy, Tripo3D, and Shap-E.
-Given a short idea from the user, generate a detailed English prompt for creating a high-quality 3D model.
-The prompt should describe: the object, style (realistic/cartoon/low-poly), materials, colors, level of detail.
-Respond with ONLY the prompt text — no explanations, no quotes, no extra text.
-Keep it under 200 characters for best results.`;
-
-    const userMessage = isRu
-      ? `Generate a 3D model prompt for: "${userText}". Respond in English only.`
-      : `Generate a 3D model prompt for: "${userText}"`;
 
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -38,10 +34,18 @@ Keep it under 200 characters for best results.`;
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
+          {
+            role: 'system',
+            content: 'You are an expert at writing prompts for AI 3D model generators like Meshy and Shap-E. Given a short idea, write a detailed English prompt for a 3D model. Include: object name, style (realistic/cartoon/low-poly), materials, colors, details. Reply with ONLY the prompt text, under 200 characters, no quotes.'
+          },
+          {
+            role: 'user',
+            content: isRu
+              ? `Write a 3D model prompt in English for: "${userText}"`
+              : `Write a 3D model prompt for: "${userText}"`
+          }
         ],
-        max_tokens: 200,
+        max_tokens: 150,
         temperature: 0.7,
       }),
     });
@@ -49,7 +53,7 @@ Keep it under 200 characters for best results.`;
     if (!res.ok) {
       const errText = await res.text();
       return new Response(
-        JSON.stringify({ error: `Groq error: ${errText}` }),
+        JSON.stringify({ error: `Groq API error ${res.status}: ${errText}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -61,9 +65,10 @@ Keep it under 200 characters for best results.`;
       JSON.stringify({ prompt }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   } catch (e) {
     return new Response(
-      JSON.stringify({ error: String(e) }),
+      JSON.stringify({ error: `Exception: ${String(e)}` }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
