@@ -85,14 +85,11 @@ async function searchSketchfab(
       downloadable: 'true',
       count: '24',
       cursor: String(page * 24),
-      'license[]': 'by',
-      'license[]': 'by-sa',
-      'license[]': 'by-nd',
-      'license[]': 'cc0',
-      'license[]': 'by-nc',
-      'license[]': 'by-nc-sa',
-      'license[]': 'by-nc-nd',
     });
+    // Append license filters (URLSearchParams supports duplicate keys via append)
+    ['by','by-sa','by-nd','cc0','by-nc','by-nc-sa','by-nc-nd'].forEach(l =>
+      params.append('license[]', l)
+    );
 
     const res = await fetch(`https://api.sketchfab.com/v3/search?${params}`, {
       headers: { Authorization: `Token ${SKETCHFAB_TOKEN}` },
