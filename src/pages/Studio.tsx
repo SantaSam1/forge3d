@@ -384,13 +384,22 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       const { data, error } = await supabase.functions.invoke('groq-prompt', {
         body: { userText, isRu },
       });
-      if (error || !data?.prompt) throw new Error(error?.message || 'No prompt');
+      if (error) {
+        console.error('[Groq] Supabase error:', error);
+        throw new Error(error.message || 'Supabase function error');
+      }
+      if (!data?.prompt) {
+        console.error('[Groq] No prompt in response:', data);
+        throw new Error('No prompt returned');
+      }
       const result = data.prompt as string;
       setAgentMessages(prev => [...prev, { role: 'assistant', text: result }]);
-    } catch {
+    } catch (e) {
+      console.error('[Groq] Exception:', e);
+      const msg = e instanceof Error ? e.message : String(e);
       setAgentMessages(prev => [...prev, {
         role: 'assistant',
-        text: isRu ? '⚠️ Ошибка. Проверьте Edge Function groq-prompt в Supabase.' : '⚠️ Error. Check groq-prompt Edge Function in Supabase.'
+        text: `⚠️ ${msg}`
       }]);
     } finally {
       setAgentLoading(false);
