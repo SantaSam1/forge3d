@@ -35,7 +35,7 @@ function MainApp() {
   const handleBrowserImport = useCallback((url: string, name: string, format: string) => {
     setBrowserOpen(false);
     setPendingImport({ url, name, format });
-    setStudioOpen(true);
+    navigate('/studio');
   }, []);
 
   if (studioOpen) {
@@ -79,11 +79,11 @@ function MainApp() {
       />
       <main className="flex-1 pt-16">
         <Hero
-          onOpenStudio={() => setStudioOpen(true)}
+          onOpenStudio={() => navigate('/studio')}
           onOpenBrowser={() => setBrowserOpen(true)}
         />
         <FeaturesSection />
-        <PricingSection onOpenStudio={() => setStudioOpen(true)} />
+        <PricingSection onOpenStudio={() => navigate('/studio')} />
       </main>
       <Footer />
       <Toast toasts={toasts} onRemove={removeToast} />
@@ -96,10 +96,63 @@ function MainApp() {
   );
 }
 
+function StudioRoute() {
+  const navigate = useNavigate();
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [pendingImport, setPendingImport] = useState<{ url: string; name: string; format: string } | null>(null);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+  const addToast = useCallback((message: string, type: ToastData['type']) => {
+    const id = crypto.randomUUID();
+    setToasts(prev => [...prev, { id, message, type }]);
+  }, []);
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+  return (
+    <>
+      <Studio
+        onClose={() => navigate('/')}
+        addToast={addToast}
+        onOpenBrowser={() => setBrowserOpen(true)}
+        pendingImport={pendingImport}
+        onPendingImportDone={() => setPendingImport(null)}
+      />
+      <AssetBrowser
+        isOpen={browserOpen}
+        onClose={() => setBrowserOpen(false)}
+        onImport={(url, name, format) => {
+          setBrowserOpen(false);
+          setPendingImport({ url, name, format });
+        }}
+      />
+      <Toast toasts={toasts} onRemove={removeToast} />
+    </>
+  );
+}
+
+function LibraryRoute() {
+  const navigate = useNavigate();
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+  return (
+    <>
+      <Library
+        onClose={() => navigate('/')}
+        onOpenInStudio={() => navigate('/studio')}
+      />
+      <Toast toasts={toasts} onRemove={removeToast} />
+    </>
+  );
+}
+
 function AppInner() {
   return (
     <Routes>
       <Route path="/" element={<MainApp />} />
+      <Route path="/studio" element={<StudioRoute />} />
+      <Route path="/library" element={<LibraryRoute />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
