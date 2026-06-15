@@ -176,10 +176,33 @@ export default function Studio({ onClose, addToast }: StudioProps) {
         ? `${SUPABASE_URL}/functions/v1/generate-3d-hunyuan`
         : `${SUPABASE_URL}/functions/v1/generate-3d-model`;
 
+      // Для Hunyuan: браузер генерирует картинку через FLUX (нет ограничений на домены)
+      let requestBody: Record<string, unknown> = { prompt, user_id: userId };
+      if (isHunyuan) {
+        addToast(isRu ? 'Шаг 1/2: Генерация изображения...' : 'Step 1/2: Generating image...', 'info');
+        const imgRes = await fetch(
+          'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inputs: `${prompt}, white background, single object, centered, 3D render`, parameters: { width: 512, height: 512 } }),
+          }
+        );
+        if (!imgRes.ok) throw new Error('Image generation failed');
+        const imgBlob = await imgRes.blob();
+        const base64 = await new Promise<string>(resolve => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(imgBlob);
+        });
+        requestBody = { image_base64: base64, image_mime: 'image/jpeg', user_id: userId };
+        addToast(isRu ? 'Шаг 2/2: Создание 3D-модели...' : 'Step 2/2: Creating 3D model...', 'info');
+      }
+
       const res = await fetch(FUNC_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, user_id: userId }),
+        body: JSON.stringify(requestBody),
       });
       const data = await res.json();
       if (res.status === 429) { if (!isPro) { addToast(isRu ? 'Лимит исчерпан. Перейдите на Pro.' : 'Free limit reached. Upgrade to Pro.', 'error'); } return; }
