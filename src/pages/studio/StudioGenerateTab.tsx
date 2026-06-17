@@ -1,14 +1,5 @@
-import { Sparkles, AlertCircle, Zap } from 'lucide-react';
+import { Sparkles, AlertCircle } from 'lucide-react';
 import { useLang } from '../../lib/i18n';
-
-type AIProvider = 'tripo' | 'hunyuan';
-
-interface ProviderDef {
-  id: AIProvider;
-  label: string;
-  labelRu: string;
-  badge: string;
-}
 
 interface Props {
   prompt: string;
@@ -20,59 +11,16 @@ interface Props {
   FREE_LIMIT: number;
   quickPrompts: string[];
   onGenerate: () => void;
-  aiProvider: AIProvider;
-  setAiProvider: (p: AIProvider) => void;
-  providers: ProviderDef[];
 }
 
 export default function StudioGenerateTab({
-  prompt, setPrompt, generating, isPro, remaining, countLoaded, FREE_LIMIT, quickPrompts, onGenerate,
-  aiProvider, setAiProvider, providers
+  prompt, setPrompt, generating, isPro, remaining, countLoaded, FREE_LIMIT, quickPrompts, onGenerate
 }: Props) {
   const { t, lang } = useLang();
   const isRu = lang === 'ru';
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Переключатель AI-провайдера */}
-      <div>
-        <p className="text-xs font-medium text-gray-400 mb-2">
-          {isRu ? 'Провайдер генерации:' : 'Generation provider:'}
-        </p>
-        <div className="flex gap-2">
-          {providers.map(p => (
-            <button
-              key={p.id}
-              onClick={() => setAiProvider(p.id)}
-              className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-xl border text-xs font-medium transition-all ${
-                aiProvider === p.id
-                  ? 'bg-cyan-500/15 border-cyan-500/60 text-cyan-300'
-                  : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
-              }`}
-            >
-              <span>{isRu ? p.labelRu : p.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-normal ${
-                p.id === 'hunyuan'
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {p.id === 'hunyuan' ? (isRu ? '🆓 бесплатно' : '🆓 free') : (isRu ? '💳 платный' : '💳 paid')}
-              </span>
-            </button>
-          ))}
-        </div>
-        {aiProvider === 'hunyuan' && (
-          <div className="mt-2 flex items-start gap-1.5 p-2 bg-green-500/10 border border-green-500/20 rounded-lg">
-            <Zap className="w-3 h-3 text-green-400 mt-0.5 shrink-0" />
-            <p className="text-[11px] text-green-300 leading-tight">
-              {isRu
-                ? 'Hunyuan3D-2 от Tencent — бесплатно через Hugging Face. Генерация ~2-3 мин.'
-                : 'Hunyuan3D-2 by Tencent — free via Hugging Face. Generation ~2-3 min.'}
-            </p>
-          </div>
-        )}
-      </div>
-
       {(!isPro && remaining === 0) && (
         <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
           <p className="text-xs font-medium text-red-400">{isRu ? 'Лимит исчерпан' : 'Free limit reached'}</p>
