@@ -23,13 +23,6 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const FREE_LIMIT = 5;
 
-// Провайдеры генерации 3D
-type AIProvider = 'tripo' | 'hunyuan';
-const PROVIDERS: { id: AIProvider; label: string; labelRu: string; badge: string }[] = [
-  { id: 'tripo', label: 'Tripo3D', labelRu: 'Tripo3D', badge: 'платный' },
-  { id: 'hunyuan', label: 'Hunyuan3D-2', labelRu: 'Hunyuan3D-2', badge: 'бесплатно' },
-];
-
 interface StudioProps {
   onClose: () => void;
   addToast: (msg: string, type: ToastData['type']) => void;
@@ -74,7 +67,6 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [generatingFromImage, setGeneratingFromImage] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
-  const [aiProvider, setAiProvider] = useState<AIProvider>('hunyuan'); // hunyuan по умолчанию (бесплатно)
 
   // AI Agent state
   const [agentInput, setAgentInput] = useState('');
@@ -135,33 +127,6 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   });
 
 
-  // ─── Универсальный polling-хелпер ────────────────────────────────────────────
-  const pollResult = async (
-    funcUrl: string,
-    idField: 'task_id' | 'event_id',
-    idValue: string,
-    modelId: string,
-    onSuccess: (url: string) => void
-  ) => {
-    let attempts = 0;
-    const maxAttempts = 60; // до ~3 минут (Hunyuan медленнее Tripo)
-    const poll = async (): Promise<void> => {
-      if (attempts >= maxAttempts) throw new Error('Timeout');
-      attempts++;
-      await new Promise(r => setTimeout(r, 3000));
-      const sr = await fetch(funcUrl, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [idField]: idValue, model_id: modelId }),
-      });
-      const sd = await sr.json();
-      if (sd.status === 'success') { onSuccess(sd.url); return; }
-      if (sd.status === 'failed') throw new Error('Generation failed');
-      return poll();
-    };
-    await poll();
-  };
-
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     if (!isPro && remaining === 0) {
@@ -171,63 +136,39 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     setGenerating(true);
     addToast(isRu ? 'Запуск генерации...' : 'Starting generation...', 'info');
     try {
-      const isHunyuan = aiProvider === 'hunyuan';
-      const FUNC_URL = isHunyuan
-        ? `${SUPABASE_URL}/functions/v1/generate-3d-hunyuan`
-        : `${SUPABASE_URL}/functions/v1/generate-3d-model`;
-
-      // Для Hunyuan: браузер генерирует картинку через FLUX (нет ограничений на домены)
-      let requestBody: Record<string, unknown> = { prompt, user_id: userId };
-      if (isHunyuan) {
-        addToast(isRu ? 'Шаг 1/2: Генерация изображения...' : 'Step 1/2: Generating image...', 'info');
-        const imgRes = await fetch(
-          'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inputs: `${prompt}, white background, single object, centered, 3D render`, parameters: { width: 512, height: 512 } }),
-          }
-        );
-        if (!imgRes.ok) throw new Error('Image generation failed');
-        const imgBlob = await imgRes.blob();
-        const base64 = await new Promise<string>(resolve => {
-          const reader = new FileReader();
-          reader.onload = () => resolve((reader.result as string).split(',')[1]);
-          reader.readAsDataURL(imgBlob);
-        });
-        requestBody = { image_base64: base64, image_mime: 'image/jpeg', user_id: userId };
-        addToast(isRu ? 'Шаг 2/2: Создание 3D-модели...' : 'Step 2/2: Creating 3D model...', 'info');
-      }
-
+      const FUNC_URL = `${SUPABASE_URL}/functions/v1/generate-3d-model`;
       const res = await fetch(FUNC_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ prompt, user_id: userId }),
       });
       const data = await res.json();
       if (res.status === 429) { if (!isPro) { addToast(isRu ? 'Лимит исчерпан. Перейдите на Pro.' : 'Free limit reached. Upgrade to Pro.', 'error'); } return; }
       if (!res.ok || data.error) throw new Error(data.error || 'Failed');
-
-      // Hunyuan возвращает event_id, Tripo — task_id
-      const idField = isHunyuan ? 'event_id' : 'task_id';
-      const idValue = isHunyuan ? data.event_id : data.task_id;
-      const { model_id } = data;
-
-      addToast(
-        isRu
-          ? `Генерация 3D-модели... ${isHunyuan ? '(~2-3 мин, HF бесплатно)' : '(~1 мин)'}`
-          : `Generating 3D model... ${isHunyuan ? '(~2-3 min, free via HF)' : '(~1 min)'}`,
-        'info'
-      );
-
-      await pollResult(FUNC_URL, idField, idValue, model_id, (url) => {
-        const finalUrl = url.includes('supabase.co/storage')
-          ? url
-          : `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(url)}`;
-        setModelUrl(finalUrl); setModelDownloadUrl(url); setModelFormat('glb'); setModelName(prompt.slice(0, 40));
-        setGenerationCount(c => c + 1);
-        addToast(isRu ? '3D-модель готова!' : '3D model ready!', 'success');
-      });
+      const { task_id, model_id } = data;
+      addToast(isRu ? 'Генерация 3D-модели... (~1 мин)' : 'Generating 3D model... (~1 min)', 'info');
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        if (attempts >= 40) throw new Error('Timeout');
+        attempts++;
+        await new Promise(r => setTimeout(r, 3000));
+        const sr = await fetch(FUNC_URL, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id, model_id }),
+        });
+        const sd = await sr.json();
+        if (sd.status === 'success') {
+          const finalUrl = sd.url.includes('supabase.co/storage') ? sd.url : `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(sd.url)}`;
+          setModelUrl(finalUrl); setModelDownloadUrl(sd.url); setModelFormat('glb'); setModelName(prompt.slice(0, 40));
+          setGenerationCount(c => c + 1);
+          addToast(isRu ? '3D-модель готова!' : '3D model ready!', 'success');
+          return;
+        }
+        if (sd.status === 'failed') throw new Error('Generation failed');
+        return poll();
+      };
+      await poll();
     } catch (err) {
       addToast(t.messages.generationFailed, 'error');
     } finally {
@@ -270,10 +211,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     setGeneratingFromImage(true);
     addToast(isRu ? 'Создание 3D из фото...' : 'Creating 3D from photo...', 'info');
     try {
-      const isHunyuan = aiProvider === 'hunyuan';
-      const FUNC_URL = isHunyuan
-        ? `${SUPABASE_URL}/functions/v1/generate-3d-hunyuan`
-        : `${SUPABASE_URL}/functions/v1/generate-3d-model`;
+      const FUNC_URL = `${SUPABASE_URL}/functions/v1/generate-3d-model`;
       // Convert to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -297,17 +235,31 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       const data = await res.json();
       if (res.status === 429) { if (!isPro) { addToast(isRu ? 'Лимит исчерпан.' : 'Free limit reached.', 'error'); } return; }
       if (!res.ok || data.error) throw new Error(data.error || 'Failed');
-      const idField = isHunyuan ? 'event_id' : 'task_id';
-      const idValue = isHunyuan ? data.event_id : data.task_id;
-      const { model_id } = data;
+      const { task_id, model_id } = data;
       addToast(isRu ? 'Генерация 3D-модели... (~1-2 мин)' : 'Generating 3D model... (~1-2 min)', 'info');
-      await pollResult(FUNC_URL, idField, idValue, model_id, (url) => {
-        const finalUrl = url.includes('supabase.co/storage') ? url : `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(url)}`;
-        setModelUrl(finalUrl); setModelDownloadUrl(url);
-        setModelFormat('glb'); setModelName(imageFile.name.replace(/\.[^.]+$/, ''));
-        setGenerationCount(c => c + 1);
-        addToast(isRu ? '3D-модель готова!' : '3D model ready!', 'success');
-      });
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        if (attempts >= 40) throw new Error('Timeout');
+        attempts++;
+        await new Promise(r => setTimeout(r, 3000));
+        const sr = await fetch(FUNC_URL, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id, model_id }),
+        });
+        const sd = await sr.json();
+        if (sd.status === 'success') {
+          const finalUrl = sd.url.includes('supabase.co/storage') ? sd.url : `${SUPABASE_URL}/functions/v1/generate-3d-model?proxy=${encodeURIComponent(sd.url)}`;
+          setModelUrl(finalUrl); setModelDownloadUrl(sd.url);
+          setModelFormat('glb'); setModelName(imageFile.name.replace(/\.[^.]+$/, ''));
+          setGenerationCount(c => c + 1);
+          addToast(isRu ? '3D-модель готова!' : '3D model ready!', 'success');
+          return;
+        }
+        if (sd.status === 'failed') throw new Error('Generation failed');
+        return poll();
+      };
+      await poll();
     } catch (err) {
       addToast(isRu ? `Ошибка: ${String(err)}` : `Error: ${String(err)}`, 'error');
     } finally {
@@ -503,8 +455,6 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               remaining={remaining} countLoaded={countLoaded}
               FREE_LIMIT={FREE_LIMIT} quickPrompts={quickPrompts}
               onGenerate={handleGenerate}
-              aiProvider={aiProvider} setAiProvider={setAiProvider}
-              providers={PROVIDERS}
             />
           )}
 
@@ -789,19 +739,6 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       {activeMobileTab === 'generate' && (
         <div className="fixed left-0 right-0 bg-gray-950 border-t border-white/5 lg:hidden z-20" style={{ bottom: '64px' }}>
           <div className="px-3 pt-2 pb-1">
-            <div className="flex gap-2 mb-1.5">
-              {/* Мини-переключатель провайдера на мобиле */}
-              {PROVIDERS.map(p => (
-                <button key={p.id} onClick={() => setAiProvider(p.id)}
-                  className={`flex-1 py-1 text-[11px] rounded-lg border transition-all ${
-                    aiProvider === p.id
-                      ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-300'
-                      : 'bg-white/5 border-white/10 text-gray-500'
-                  }`}>
-                  {p.id === 'hunyuan' ? '🆓 Hunyuan3D' : '💳 Tripo3D'}
-                </button>
-              ))}
-            </div>
             <div className="flex gap-2">
               <input value={prompt} onChange={e => setPrompt(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
