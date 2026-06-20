@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Sparkles, Upload, BookOpen, RefreshCw, Download, Link2, X,
   ArrowLeft, Cpu, Layers, ChevronDown, Search, Check, Home, History, User, Menu, AlertCircle, Clock,
-  Package, Send, Wand2
+  Package, Send, Wand2, Cog
 } from 'lucide-react';
 import Viewer3D from '../components/Viewer3D';
 import AssetBrowser from '../components/AssetBrowser';
@@ -12,10 +12,13 @@ import { useSEO } from '../lib/useSEO';
 import type { Model } from '../lib/supabase';
 import type { ToastData } from '../components/Toast';
 import StudioGenerateTab from './studio/StudioGenerateTab';
+import StudioBlueprintTab, { type BlueprintResult } from './studio/StudioBlueprintTab';
 import StudioUploadTab from './studio/StudioUploadTab';
 import StudioLibraryTab from './studio/StudioLibraryTab';
 import StudioAgent from './studio/StudioAgent';
 import StudioExport from './studio/StudioExport';
+import { buildGearMesh, buildShaftMesh, buildBushingMesh, buildPlateMesh } from '../lib/parametricShapes';
+import { exportObjectToGlbUrl } from '../lib/exportToGlb';
 
 
 const EXPORT_FORMATS = ['glb', 'obj', 'gltf', 'usdz', 'stl', 'fbx'] as const;
@@ -29,7 +32,7 @@ interface StudioProps {
 }
 
 type MobileTab = 'generate' | 'library' | 'history' | 'profile';
-type DesktopTab = 'generate' | 'upload' | 'library' | 'convert';
+type DesktopTab = 'generate' | 'blueprint' | 'upload' | 'library' | 'convert';
 
 interface LibraryItem {
   id: string; name: string; category: string;
@@ -43,6 +46,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [activeDesktopTab, setActiveDesktopTab] = useState<DesktopTab>('generate');
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [generatingBlueprint, setGeneratingBlueprint] = useState(false);
   const [modelUrl, setModelUrl] = useState<string | undefined>();
   const [modelFormat, setModelFormat] = useState<string>('glb');
   const [modelName, setModelName] = useState('');
@@ -85,6 +89,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
 
   const desktopTabs = [
     { id: 'generate' as DesktopTab, label: t.studio.tabs.generate, icon: Sparkles },
+    { id: 'blueprint' as DesktopTab, label: t.studio.tabs.blueprint, icon: Cog },
     { id: 'upload' as DesktopTab, label: t.studio.tabs.upload, icon: Upload },
     { id: 'library' as DesktopTab, label: t.studio.tabs.library, icon: BookOpen },
     { id: 'convert' as DesktopTab, label: t.studio.tabs.convert, icon: RefreshCw },
@@ -298,6 +303,31 @@ export default function Studio({ onClose, addToast }: StudioProps) {
     it.tags?.some(tag => tag.toLowerCase().includes(librarySearch.toLowerCase()))
   );
 
+  // ─── Параметрический чертёж: шестерня/вал/втулка/пластина → точная геометрия → GLB ───
+  const handleBuildBlueprint = async (result: BlueprintResult) => {
+    setGeneratingBlueprint(true);
+    addToast(isRu ? 'Построение точной геометрии...' : 'Building exact geometry...', 'info');
+    try {
+      let object;
+      if (result.shape === 'gear' && result.gear) object = buildGearMesh(result.gear);
+      else if (result.shape === 'shaft' && result.shaft) object = buildShaftMesh(result.shaft);
+      else if (result.shape === 'bushing' && result.bushing) object = buildBushingMesh(result.bushing);
+      else if (result.shape === 'plate' && result.plate) object = buildPlateMesh(result.plate);
+      else throw new Error('Unknown shape');
+
+      const blobUrl = await exportObjectToGlbUrl(object);
+      setModelUrl(blobUrl);
+      setModelDownloadUrl(blobUrl);
+      setModelFormat('glb');
+      setModelName(result.name);
+      addToast(isRu ? 'Модель построена!' : 'Model built!', 'success');
+    } catch (err) {
+      addToast(isRu ? 'Ошибка построения модели' : 'Model build failed', 'error');
+    } finally {
+      setGeneratingBlueprint(false);
+    }
+  };
+
   const handleCopyLink = () => {
     if (modelUrl) { navigator.clipboard.writeText(modelUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }
   };
@@ -455,6 +485,13 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               remaining={remaining} countLoaded={countLoaded}
               FREE_LIMIT={FREE_LIMIT} quickPrompts={quickPrompts}
               onGenerate={handleGenerate}
+            />
+          )}
+
+          {activeDesktopTab === 'blueprint' && (
+            <StudioBlueprintTab
+              generating={generatingBlueprint}
+              onBuild={handleBuildBlueprint}
             />
           )}
 

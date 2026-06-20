@@ -30,6 +30,7 @@ const translations = {
       title: 'Studio',
       tabs: {
         generate: 'Generate',
+        blueprint: 'Blueprint',
         upload: 'Upload',
         library: 'Library',
         convert: 'Convert',
@@ -180,6 +181,7 @@ const translations = {
       title: 'Студия',
       tabs: {
         generate: 'Генерация',
+        blueprint: 'Чертёж',
         upload: 'Загрузить',
         library: 'Библиотека',
         convert: 'Конвертация',
