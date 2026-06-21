@@ -47,6 +47,7 @@ export default function Studio({ onClose, addToast }: StudioProps) {
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generatingBlueprint, setGeneratingBlueprint] = useState(false);
+  const [mobileGenMode, setMobileGenMode] = useState<'ai' | 'blueprint'>('ai');
   const [modelUrl, setModelUrl] = useState<string | undefined>();
   const [modelFormat, setModelFormat] = useState<string>('glb');
   const [modelName, setModelName] = useState('');
@@ -468,11 +469,11 @@ export default function Studio({ onClose, addToast }: StudioProps) {
 
       {/* ═══ DESKTOP SIDEBAR ═══ */}
       <aside className="hidden lg:flex w-80 flex-shrink-0 border-r border-white/5 flex-col bg-gray-950">
-        <div className="flex border-b border-white/5">
+        <div className="flex flex-wrap border-b border-white/5">
           {desktopTabs.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => { setActiveDesktopTab(id); if (id === 'library') loadLibrary(); }}
-              className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-all ${activeDesktopTab === id ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-gray-500 hover:text-gray-300'}`}>
-              <Icon className="w-4 h-4" />{label}
+              className={`flex-1 min-w-[20%] flex flex-col items-center gap-1 py-2.5 px-1 text-[11px] leading-tight transition-all ${activeDesktopTab === id ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-gray-500 hover:text-gray-300 border-b-2 border-transparent'}`}>
+              <Icon className="w-4 h-4" /><span className="text-center">{label}</span>
             </button>
           ))}
         </div>
@@ -775,7 +776,26 @@ export default function Studio({ onClose, addToast }: StudioProps) {
       {/* ═══ MOBILE BOTTOM PANEL ═══ */}
       {activeMobileTab === 'generate' && (
         <div className="fixed left-0 right-0 bg-gray-950 border-t border-white/5 lg:hidden z-20" style={{ bottom: '64px' }}>
-          <div className="px-3 pt-2 pb-1">
+          <div className="px-3 pt-2 pb-1.5">
+            <div className="flex gap-1.5 p-1 bg-gray-900 rounded-xl border border-white/10">
+              <button onClick={() => setMobileGenMode('ai')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${mobileGenMode === 'ai' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-500'}`}>
+                <Sparkles className="w-3.5 h-3.5" />{isRu ? 'AI Генерация' : 'AI Generate'}
+              </button>
+              <button onClick={() => setMobileGenMode('blueprint')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${mobileGenMode === 'blueprint' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-500'}`}>
+                <Cog className="w-3.5 h-3.5" />{isRu ? 'Чертёж' : 'Blueprint'}
+              </button>
+            </div>
+          </div>
+
+          {mobileGenMode === 'blueprint' ? (
+            <div className="px-3 pb-3 max-h-[60vh] overflow-y-auto">
+              <StudioBlueprintTab generating={generatingBlueprint} onBuild={handleBuildBlueprint} />
+            </div>
+          ) : (
+          <>
+          <div className="px-3 pt-0 pb-1">
             <div className="flex gap-2">
               <input value={prompt} onChange={e => setPrompt(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
@@ -829,6 +849,8 @@ export default function Studio({ onClose, addToast }: StudioProps) {
               </button>
             </div>
           </div>
+          </>
+          )}
         </div>
       )}
 
