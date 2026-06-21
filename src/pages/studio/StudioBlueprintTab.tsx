@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Cog, AlignVerticalSpaceAround, CircleDashed, RectangleHorizontal, Sparkles, Ruler, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Cog, AlignVerticalSpaceAround, CircleDashed, RectangleHorizontal, Sparkles, Ruler, SlidersHorizontal, AlertTriangle, ImagePlus, X, ZoomIn } from 'lucide-react';
 import { useLang } from '../../lib/i18n';
 import type { GearParams, ShaftSegment, BushingParams, PlateParams } from '../../lib/parametricShapes';
 
@@ -108,6 +108,19 @@ export default function StudioBlueprintTab({ generating, onBuild }: Props) {
     () => fitGearFromDrawing(drawingPitchD, drawingOuterD),
     [drawingPitchD, drawingOuterD]
   );
+
+  // Фото чертежа — только для визуального сравнения рядом с полями; не анализируется автоматически
+  const [drawingPhoto, setDrawingPhoto] = useState<string | null>(null);
+  const [photoZoomed, setPhotoZoomed] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setDrawingPhoto(reader.result as string);
+    reader.readAsDataURL(file);
+  };
 
   // Вал (до 3 сегментов)
   const [shaftSegments, setShaftSegments] = useState<ShaftSegment[]>([
@@ -258,6 +271,65 @@ export default function StudioBlueprintTab({ generating, onBuild }: Props) {
                   ? 'Введите два диаметра, подписанные на чертеже — модуль и число зубьев будут вычислены автоматически по стандартному ряду модулей (ГОСТ 9563 / ISO 54).'
                   : 'Enter the two diameters labeled on the drawing — module and tooth count are computed automatically from the standard module series (ISO 54).'}
               </p>
+
+              {/* Фото чертежа — только для визуальной сверки рядом с полями, числа вводятся вручную */}
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+              {drawingPhoto ? (
+                <div className="relative rounded-lg border border-white/10 overflow-hidden bg-gray-900">
+                  <img
+                    src={drawingPhoto}
+                    alt={isRu ? 'Чертёж' : 'Drawing'}
+                    onClick={() => setPhotoZoomed(true)}
+                    className="w-full max-h-40 object-contain cursor-zoom-in bg-white"
+                  />
+                  <button
+                    onClick={() => setPhotoZoomed(true)}
+                    className="absolute bottom-1.5 right-1.5 p-1 bg-black/60 hover:bg-black/80 rounded-md text-white"
+                    aria-label={isRu ? 'Увеличить' : 'Zoom in'}
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDrawingPhoto(null)}
+                    className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-black/80 rounded-md text-white"
+                    aria-label={isRu ? 'Удалить фото' : 'Remove photo'}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-white/15 hover:border-cyan-500/40 rounded-lg text-xs text-gray-500 hover:text-cyan-400 transition-all"
+                >
+                  <ImagePlus className="w-4 h-4" />
+                  {isRu ? 'Загрузить фото чертежа (для сверки)' : 'Upload drawing photo (for reference)'}
+                </button>
+              )}
+              {drawingPhoto && (
+                <p className="text-[10px] text-gray-600 leading-tight -mt-1">
+                  {isRu
+                    ? 'Фото показывается только для удобства — числа считываются и вводятся вручную, без автоматического распознавания.'
+                    : 'Photo is shown for reference only — numbers are read and entered manually, no automatic recognition.'}
+                </p>
+              )}
+
+              {photoZoomed && drawingPhoto && (
+                <div
+                  onClick={() => setPhotoZoomed(false)}
+                  className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6 cursor-zoom-out"
+                >
+                  <img src={drawingPhoto} alt={isRu ? 'Чертёж' : 'Drawing'} className="max-w-full max-h-full object-contain bg-white rounded-lg" />
+                  <button
+                    onClick={() => setPhotoZoomed(false)}
+                    className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
+                    aria-label={isRu ? 'Закрыть' : 'Close'}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+
               {numberField(isRu ? 'Делительный Ø (с чертежа)' : 'Pitch Ø (from drawing)', drawingPitchD, setDrawingPitchD, { min: 1, step: 0.05, suffix: 'мм' })}
               {numberField(isRu ? 'Внешний Ø (с чертежа)' : 'Outer Ø (from drawing)', drawingOuterD, setDrawingOuterD, { min: 1, step: 0.05, suffix: 'мм' })}
               {numberField(isRu ? 'Диаметр отверстия' : 'Bore diameter', drawingBore, setDrawingBore, { min: 0, step: 0.5, suffix: 'мм' })}
