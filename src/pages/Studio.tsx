@@ -469,11 +469,12 @@ export default function Studio({ onClose, addToast }: StudioProps) {
 
       {/* ═══ DESKTOP SIDEBAR ═══ */}
       <aside className="hidden lg:flex w-80 flex-shrink-0 border-r border-white/5 flex-col bg-gray-950">
-        <div className="flex flex-wrap border-b border-white/5">
+        <div className="grid grid-cols-3 border-b border-white/5">
           {desktopTabs.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => { setActiveDesktopTab(id); if (id === 'library') loadLibrary(); }}
-              className={`flex-1 min-w-[20%] flex flex-col items-center gap-1 py-2.5 px-1 text-[11px] leading-tight transition-all ${activeDesktopTab === id ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-gray-500 hover:text-gray-300 border-b-2 border-transparent'}`}>
-              <Icon className="w-4 h-4" /><span className="text-center">{label}</span>
+              className={`flex flex-col items-center justify-center gap-1 py-2.5 px-1 text-[11px] leading-tight border-b-2 transition-all ${activeDesktopTab === id ? 'text-cyan-400 border-cyan-500 bg-cyan-500/5' : 'text-gray-500 hover:text-gray-300 border-transparent'}`}>
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span className="text-center whitespace-nowrap">{label}</span>
             </button>
           ))}
         </div>
