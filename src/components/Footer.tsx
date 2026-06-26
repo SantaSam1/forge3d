@@ -14,7 +14,7 @@ export default function Footer() {
 
   const companyLinks = [
     { label: t.footer.links.about,   href: '/about'   },
-    { label: lang === 'ru' ? 'Блог' : 'Blog',         href: '/about'   },
+    { label: lang === 'ru' ? 'Блог' : 'Blog',         href: '/blog'   },
     { label: t.footer.links.privacy, href: '/privacy' },
     { label: t.footer.links.terms,   href: '/terms'   },
   ];

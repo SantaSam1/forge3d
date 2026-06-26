@@ -40,6 +40,7 @@ export default function Header({ onOpenStudio, onOpenLibrary, onNavigate }: Head
     { label: t.nav.library, action: () => { navigate('/library'); setMenuOpen(false); } },
     { label: t.nav.assets,  action: () => { openBrowser(); setMenuOpen(false); } },
     { label: t.nav.pricing, action: () => { navigate('/pricing'); setMenuOpen(false); } },
+    { label: lang === 'ru' ? 'Блог' : 'Blog', action: () => { navigate('/blog'); setMenuOpen(false); } },
     { label: t.nav.docs,    action: () => { navigate('/about'); setMenuOpen(false); } },
   ];
 

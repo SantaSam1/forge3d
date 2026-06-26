@@ -10,6 +10,10 @@ import Footer from './components/Footer';
 const Studio = lazy(() => import('./pages/Studio'));
 const AssetBrowser = lazy(() => import('./components/AssetBrowser'));
 const Library = lazy(() => import('./pages/Library'));
+const BlogListPage = lazy(() => import('./pages/BlogListPage'));
+const BlogPostPage = lazy(() => import('./pages/BlogPostPage'));
+const BlogAdminPage = lazy(() => import('./pages/BlogAdminPage'));
+const BlogAdminLoginPage = lazy(() => import('./pages/BlogAdminLoginPage'));
 import Toast, { ToastData } from './components/Toast';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
@@ -143,6 +147,15 @@ function LibraryRoute() {
   );
 }
 
+// ── Generic fallback for lazily-loaded routes ─────────────────────────────────
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-gray-950">
+      <div className="w-10 h-10 border-2 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin" />
+    </div>
+  );
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 function AppRoutes({ addToast }: { addToast: (msg: string, type: ToastData['type']) => void }) {
   return (
@@ -154,6 +167,18 @@ function AppRoutes({ addToast }: { addToast: (msg: string, type: ToastData['type
       <Route path="/about" element={<AboutPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
+      <Route path="/blog" element={
+        <Suspense fallback={<RouteFallback />}><BlogListPage /></Suspense>
+      } />
+      <Route path="/blog/admin/login" element={
+        <Suspense fallback={<RouteFallback />}><BlogAdminLoginPage /></Suspense>
+      } />
+      <Route path="/blog/admin" element={
+        <Suspense fallback={<RouteFallback />}><BlogAdminPage /></Suspense>
+      } />
+      <Route path="/blog/:slug" element={
+        <Suspense fallback={<RouteFallback />}><BlogPostPage /></Suspense>
+      } />
     </Routes>
   );
 }

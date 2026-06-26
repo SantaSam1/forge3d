@@ -42,3 +42,18 @@ export interface LibraryModel {
   downloads: number;
   created_at: string;
 }
+
+export interface BlogPost {
+  id: string;
+  author_id: string | null;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  cover_url: string;
+  tags: string[];
+  published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
