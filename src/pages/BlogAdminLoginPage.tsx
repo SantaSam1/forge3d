@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Loader2, Box } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useSEO } from '../lib/useSEO';
 
 export default function BlogAdminLoginPage() {
   const navigate = useNavigate();
@@ -9,6 +10,12 @@ export default function BlogAdminLoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useSEO({
+    title: 'Вход в админку',
+    description: '',
+    noindex: true,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -4,5 +4,6 @@ Allow: /
 Disallow: /api/
 Disallow: /auth/
 Disallow: /admin/
+Disallow: /blog/admin
 
 Sitemap: https://3d-prin.ru/sitemap.xml

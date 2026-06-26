@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase, BlogPost } from '../lib/supabase';
 import { slugify } from '../lib/slugify';
+import { useSEO } from '../lib/useSEO';
 import type { User } from '@supabase/supabase-js';
 
 type Draft = {
@@ -32,6 +33,8 @@ export default function BlogAdminPage() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingInline, setUploadingInline] = useState(false);
   const [formError, setFormError] = useState('');
+
+  useSEO({ title: 'Админка блога', description: '', noindex: true });
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
