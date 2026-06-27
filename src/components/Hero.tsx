@@ -3,11 +3,12 @@ import { useLang } from '../lib/i18n';
 
 interface HeroProps {
   onOpenStudio: () => void;
+  onOpenBrowser?: () => void;
 }
 
 const featureIcons = [Sparkles, Cpu, Layers, Printer];
 
-export default function Hero({ onOpenStudio }: HeroProps) {
+export default function Hero({ onOpenStudio, onOpenBrowser }: HeroProps) {
   const { t } = useLang();
 
   return (
@@ -47,7 +48,7 @@ export default function Hero({ onOpenStudio }: HeroProps) {
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={onOpenStudio}
+                onClick={onOpenBrowser ?? onOpenStudio}
                 className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl border border-white/10 hover:border-white/20 transition-all"
               >
                 {t.hero.ctaSecondary}
