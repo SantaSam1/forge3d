@@ -37,7 +37,6 @@ export default function Header({ onOpenStudio, onOpenLibrary, onNavigate }: Head
 
   const navItems = [
     { label: t.nav.studio,  action: () => { navigate('/studio'); setMenuOpen(false); } },
-    { label: t.nav.library, action: () => { navigate('/library'); setMenuOpen(false); } },
     { label: t.nav.assets,  action: () => { openBrowser(); setMenuOpen(false); } },
     { label: t.nav.pricing, action: () => { navigate('/pricing'); setMenuOpen(false); } },
     { label: lang === 'ru' ? 'Блог' : 'Blog', action: () => { navigate('/blog'); setMenuOpen(false); } },
@@ -93,10 +92,6 @@ export default function Header({ onOpenStudio, onOpenLibrary, onNavigate }: Head
                       <button onClick={() => { navigate('/studio'); setUserMenuOpen(false); }}
                         className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
                         <User className="w-4 h-4" />{lang === 'ru' ? 'Открыть студию' : 'Open Studio'}
-                      </button>
-                      <button onClick={() => { navigate('/library'); setUserMenuOpen(false); }}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
-                        <Box className="w-4 h-4" />{lang === 'ru' ? 'Библиотека' : 'Library'}
                       </button>
                       <button onClick={handleSignOut}
                         className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 transition-colors">
