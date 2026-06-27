@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X, Search, Eye, Layers, Globe, Database,
   Loader2, ExternalLink, Import, Filter,
-  Grid3X3, List, RefreshCw, Package
+  Grid3X3, List, RefreshCw, Package, Box
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
@@ -14,7 +14,7 @@ interface AssetModel {
   thumbnail: string;
   downloadUrl?: string;
   viewerUrl?: string;
-  source: 'local' | 'sketchfab' | 'polypizza';
+  source: 'local' | 'sketchfab' | 'polypizza' | 'osa';
   format?: string;
   tags?: string[];
   category?: string;
@@ -47,6 +47,7 @@ const SOURCES = [
   { id: 'local',     labelEn: 'My Library',   labelRu: 'Моя библиотека', icon: Database },
   { id: 'sketchfab', labelEn: 'Sketchfab',    labelRu: 'Sketchfab',     icon: Globe    },
   { id: 'polypizza', labelEn: 'Poly Pizza',   labelRu: 'Poly Pizza',    icon: Package  },
+  { id: 'osa',       labelEn: 'Open Assets',  labelRu: 'Open Assets',  icon: Box       },
 ] as const;
 type SourceId = typeof SOURCES[number]['id'];
 
@@ -212,7 +213,103 @@ async function fetchPolyPizza(
   }
 }
 
-// ─── ModelCard ────────────────────────────────────────────────────────────────
+// ─── API: Open Source 3D Assets (ToxSam registry, CC0, via raw GitHub JSON) ───
+const OSA_BASE = 'https://raw.githubusercontent.com/ToxSam/open-source-3d-assets/main/data';
+
+interface OsaRawAsset {
+  id?: string;
+  name?: string;
+  model_file_url?: string;
+  thumbnail_url?: string;
+  format?: string;
+  metadata?: {
+    file_size?: number;
+    attributes?: { trait_type: string; value: string }[];
+  };
+}
+
+// All ~991 models live across ~17 small per-collection JSON files with no
+// pagination of their own — fetch once, cache in memory for the session,
+// then paginate/filter on the client.
+let osaCache: AssetModel[] | null = null;
+let osaCachePromise: Promise<AssetModel[]> | null = null;
+
+async function loadOsaCatalog(): Promise<AssetModel[]> {
+  if (osaCache) return osaCache;
+  if (osaCachePromise) return osaCachePromise;
+
+  osaCachePromise = (async () => {
+    try {
+      const projectsRes = await fetch(`${OSA_BASE}/projects.json`);
+      if (!projectsRes.ok) return [];
+      const projects: any[] = await projectsRes.json();
+
+      const collections = await Promise.all(
+        projects.map(async (proj) => {
+          try {
+            const res = await fetch(`${OSA_BASE}/${proj.asset_data_file}`);
+            if (!res.ok) return [];
+            const assets: OsaRawAsset[] = await res.json();
+            return assets.map((a, i): AssetModel => {
+              const attrs = a.metadata?.attributes || [];
+              const tags = attrs.map((attr) => attr.value).filter(Boolean);
+              const niceName = (a.name || proj.name || 'Untitled').replace(/_/g, ' ');
+              return {
+                id: `osa_${proj.id}_${a.id || i}`,
+                name: niceName,
+                thumbnail: a.thumbnail_url || '',
+                downloadUrl: a.model_file_url || '',
+                source: 'osa' as const,
+                format: (a.format || 'glb').toLowerCase(),
+                tags: tags.length ? tags : [proj.name],
+                category: proj.name,
+                author: proj.creator_id || 'Polygonal Mind',
+                license: proj.license || 'CC0',
+                externalUrl: proj.github_url,
+                isDownloadable: true,
+              };
+            });
+          } catch { return []; }
+        })
+      );
+
+      const flat = collections.flat().filter((m) => m.downloadUrl);
+      osaCache = flat;
+      return flat;
+    } catch (e) {
+      console.error('OSA load exception', e);
+      return [];
+    } finally {
+      osaCachePromise = null;
+    }
+  })();
+
+  return osaCachePromise;
+}
+
+async function fetchOsa(
+  q: string, cat: string, offset: number, limit: number = 24
+): Promise<{ models: AssetModel[]; total: number }> {
+  const all = await loadOsaCatalog();
+  const term = q.trim().toLowerCase();
+
+  const filtered = all.filter((m) => {
+    if (cat && m.category?.toLowerCase() !== cat.toLowerCase() &&
+        !m.tags?.some((t) => t.toLowerCase() === cat.toLowerCase())) {
+      return false;
+    }
+    if (!term) return true;
+    return (
+      m.name.toLowerCase().includes(term) ||
+      m.tags?.some((t) => t.toLowerCase().includes(term)) ||
+      m.category?.toLowerCase().includes(term)
+    );
+  });
+
+  return { models: filtered.slice(offset, offset + limit), total: filtered.length };
+}
+
+
 function ModelCard({ model, isRu, onImport, onPreview, importing }: {
   model: AssetModel; isRu: boolean;
   onImport: (m: AssetModel) => void;
@@ -223,6 +320,7 @@ function ModelCard({ model, isRu, onImport, onPreview, importing }: {
     local:     { cls: 'bg-cyan-500/20 text-cyan-400',   label: 'Local'      },
     sketchfab: { cls: 'bg-orange-500/20 text-orange-400', label: 'Sketchfab' },
     polypizza: { cls: 'bg-green-500/20 text-green-400',  label: 'Poly Pizza' },
+    osa:       { cls: 'bg-purple-500/20 text-purple-400', label: 'Open Assets' },
   }[model.source];
 
   return (
@@ -345,6 +443,8 @@ export default function AssetBrowser({ isOpen, onClose, onImport }: Omit<AssetBr
   const sfCursorRef = useRef('');
   const ppOffsetRef = useRef(0);
   const ppTotalRef = useRef(0);
+  const osaOffsetRef = useRef(0);
+  const osaTotalRef = useRef(0);
   const isLoadingRef = useRef(false);
   const loaderRef = useRef<HTMLDivElement>(null);
 
@@ -365,6 +465,8 @@ export default function AssetBrowser({ isOpen, onClose, onImport }: Omit<AssetBr
     sfCursorRef.current = '';
     ppOffsetRef.current = 0;
     ppTotalRef.current = 0;
+    osaOffsetRef.current = 0;
+    osaTotalRef.current = 0;
     isLoadingRef.current = false;
     
     setLoading(true);
@@ -422,6 +524,15 @@ if (source === 'polypizza' || source === 'all') {
         firstModels.push(...sfModels);
         sfCursorRef.current = nextCursor;
         moreData = moreData || !!nextCursor;
+      }
+
+      // Open Source 3D Assets (ToxSam, CC0)
+      if (source === 'osa' || source === 'all') {
+        const { models: osaModels, total } = await fetchOsa(dq, category, 0, 24);
+        firstModels.push(...osaModels);
+        osaOffsetRef.current = osaModels.length;
+        osaTotalRef.current = total;
+        moreData = moreData || osaOffsetRef.current < total;
       }
 
       // Убираем дубликаты
@@ -484,6 +595,17 @@ if (source === 'polypizza' || source === 'all') {
         }
       }
 
+      // Open Source 3D Assets - загружаем следующую страницу
+      if ((source === 'osa' || source === 'all') && osaOffsetRef.current < osaTotalRef.current) {
+        const { models: osaModels, total } = await fetchOsa(dq, category, osaOffsetRef.current, 24);
+        if (osaModels.length > 0) {
+          newModels.push(...osaModels);
+          osaOffsetRef.current += osaModels.length;
+          osaTotalRef.current = total;
+          moreData = moreData || osaOffsetRef.current < total;
+        }
+      }
+
       // Убираем дубликаты
       const existingIds = new Set(models.map(m => m.id));
       const uniqueNewModels = newModels.filter(model => !existingIds.has(model.id));
@@ -537,6 +659,9 @@ if (source === 'polypizza' || source === 'all') {
         onImport(model.downloadUrl, model.name, 'glb');
         setPreview(null);
       } else if (model.source === 'local' && model.downloadUrl) {
+        onImport(model.downloadUrl, model.name, model.format || 'glb');
+        setPreview(null);
+      } else if (model.source === 'osa' && model.downloadUrl) {
         onImport(model.downloadUrl, model.name, model.format || 'glb');
         setPreview(null);
       } else if (model.source === 'sketchfab' && model.sketchfabUid) {
@@ -695,6 +820,7 @@ if (source === 'polypizza' || source === 'all') {
                 local:     { cls: 'bg-cyan-500/20 text-cyan-400',   label: 'Local'      },
                 sketchfab: { cls: 'bg-orange-500/20 text-orange-400', label: 'Sketchfab' },
                 polypizza: { cls: 'bg-green-500/20 text-green-400',  label: 'Poly Pizza' },
+                osa:       { cls: 'bg-purple-500/20 text-purple-400', label: 'Open Assets' },
               }[m.source];
               return (
                 <div 
