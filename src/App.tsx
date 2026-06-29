@@ -19,6 +19,7 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import AboutPage from './pages/AboutPage';
 import PricingPage from './pages/PricingPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 // ── Global AssetBrowser context ───────────────────────────────────────────────
 const BrowserCtx = createContext<{ open: () => void }>({ open: () => {} });
@@ -179,6 +180,7 @@ function AppRoutes({ addToast }: { addToast: (msg: string, type: ToastData['type
       <Route path="/blog/:slug" element={
         <Suspense fallback={<RouteFallback />}><BlogPostPage /></Suspense>
       } />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
